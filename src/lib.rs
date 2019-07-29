@@ -1,7 +1,12 @@
+extern crate sha3;
+
+use sha3::{Digest, Keccak256};
+
 #[derive(Debug,Clone,PartialEq)]
 enum Node {
+    Hash(Box<Keccak256>, u32),
     Leaf(Vec<u8>, Vec<u8>),
-    Extension(Vec<u8>),
+    Extension(Vec<u8>, Box<Node>),
     DualNode(Vec<Node>),
     FullNode(Vec<Node>),
     EmptySlot
@@ -9,9 +14,9 @@ enum Node {
 
 enum Instruction {
     BRANCH(usize),
-    HASHER(usize),
+    HASHER,
     LEAF(usize),
-    EXTENSION(usize),
+    EXTENSION(Vec<u8>),
     ADD(usize)
 }
 
@@ -22,6 +27,17 @@ fn step(stack: &mut Vec<Node>, keyvals: Vec<(Vec<u8>, Vec<u8>)>, instructions: V
     let mut keyvalidx = 0;
     for instr in instructions {
         match instr {
+            HASHER => {
+                if let Some(item) = stack.pop() {
+                    let mut hasher = Keccak256::new();
+                    let (key, value) = &keyvals[keyvalidx];
+                    keyvalidx += 1;
+                    hasher.input(format!("{:?}{:?}", key, value));
+                    stack.push(Hash(Box::new(hasher), 1))
+                } else {
+                    panic!("Could not pop a value from the stack, that is required for a HASHER")
+                }
+            },
             LEAF(keylength) => {
                 let (key, value) = &keyvals[keyvalidx];
                 stack.push(Leaf((&key[key.len()-keylength..]).to_vec(), value.to_vec()));
@@ -33,7 +49,35 @@ fn step(stack: &mut Vec<Node>, keyvals: Vec<(Vec<u8>, Vec<u8>)>, instructions: V
                     children[digit] = node;
                     stack.push(FullNode(children))
                 } else {
-                    panic!("Could not pop a value from the stack")
+                    panic!("Could not pop a value from the stack, that is required for a BRANCH")
+                }
+            },
+            EXTENSION(key) => {
+                if let Some(node) = stack.pop() {
+                    stack.push(Extension(key, Box::new(node)));
+                } else {
+                    panic!("Could not find a node on the stack, that is required for an EXTENSION")
+                }
+            },
+            ADD(digit) => {
+                if let (Some(el1), Some(el2)) = (stack.pop(), stack.last_mut()) {
+                    match el2 {
+                        FullNode(ref mut n2) => {
+                            if digit >= n2.len() {
+                                panic!(format!("Incorrect full node index: {} > {}", digit, n2.len() - 1))
+                            }
+
+                            // A hash needs to be fed into the hash sponge, any other node is simply
+                            // a child (el1) of the parent node (el2).
+                            match el1 {
+                                Hash(_,_) => panic!("Not yet implemented"),
+                                _ => n2[digit] = el1
+                            }
+                        },
+                        _ => panic!("Not supported yet") // Need to support Hash()
+                    }
+                } else {
+                    panic!("Could not find enough parameters to ADD")
                 }
             },
             _ => panic!("Unsupported instruction")
@@ -61,5 +105,12 @@ mod tests {
         let mut stack = Vec::new();
         let out = step(&mut stack, vec![(vec![1, 2, 3], vec![4,5,6])], vec![LEAF(0), BRANCH(0)]);
         assert_eq!(out, FullNode(vec![Leaf(vec![], vec![4,5,6]), EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot]))
+    }
+
+    #[test]
+    fn tree_with_added_branch() {
+        let mut stack = Vec::new();
+        let out = step(&mut stack, vec![(vec![1, 2, 3], vec![4,5,6]), (vec![7,8,9], vec![10,11,12])], vec![LEAF(0), BRANCH(0), LEAF(1), ADD(2)]);
+        assert_eq!(out, FullNode(vec![Leaf(vec![], vec![4,5,6]), EmptySlot, Leaf(vec![9], vec![10, 11, 12]), EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot]))
     }
 }
