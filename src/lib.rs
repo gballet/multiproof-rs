@@ -4,17 +4,20 @@ use sha3::{Digest, Keccak256};
 
 #[derive(Debug,Clone,PartialEq)]
 enum Node {
-    Hash(Box<Keccak256>, u32),
+    Hash(Box<Node>, u32, u32), // (Item to hash, # of empty strings, total # of items)
     Leaf(Vec<u8>, Vec<u8>),
     Extension(Vec<u8>, Box<Node>),
-    DualNode(Vec<Node>),
     FullNode(Vec<Node>),
     EmptySlot
 }
 
+trait Hashable {
+    fn hash(&self) -> Vec<u8>;
+}
+
 enum Instruction {
     BRANCH(usize),
-    HASHER,
+    HASHER(usize),
     LEAF(usize),
     EXTENSION(Vec<u8>),
     ADD(usize)
@@ -27,13 +30,9 @@ fn step(stack: &mut Vec<Node>, keyvals: Vec<(Vec<u8>, Vec<u8>)>, instructions: V
     let mut keyvalidx = 0;
     for instr in instructions {
         match instr {
-            HASHER => {
+            HASHER(digit) => {
                 if let Some(item) = stack.pop() {
-                    let mut hasher = Keccak256::new();
-                    let (key, value) = &keyvals[keyvalidx];
-                    keyvalidx += 1;
-                    hasher.input(format!("{:?}{:?}", key, value));
-                    stack.push(Hash(Box::new(hasher), 1))
+                    stack.push(Hash(Box::new(item), 1+digit, digit));
                 } else {
                     panic!("Could not pop a value from the stack, that is required for a HASHER")
                 }
@@ -68,11 +67,8 @@ fn step(stack: &mut Vec<Node>, keyvals: Vec<(Vec<u8>, Vec<u8>)>, instructions: V
                             }
 
                             // A hash needs to be fed into the hash sponge, any other node is simply
-                            // a child (el1) of the parent node (el2).
-                            match el1 {
-                                Hash(_,_) => panic!("Not yet implemented"),
-                                _ => n2[digit] = el1
-                            }
+                            // a child (el1) of the parent node (el2). this is done during resolve.
+                            n2[digit] = el1;
                         },
                         _ => panic!("Not supported yet") // Need to support Hash()
                     }
