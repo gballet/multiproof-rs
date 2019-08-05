@@ -24,14 +24,21 @@ impl Hashable for Node {
             Leaf(ref k, ref v) => {
                 let encoding =
                     rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![k.clone(), v.clone()][..]);
-                let mut hasher = Keccak256::new();
-                hasher.input(&encoding);
-                Vec::<u8>::from(&hasher.result()[..])
+
+                // Only hash if the encoder output is less than 32 bytes.
+                if encoding.len() > 32 {
+                    let mut hasher = Keccak256::new();
+                    hasher.input(&encoding);
+                    Vec::<u8>::from(&hasher.result()[..])
+                } else {
+                    encoding
+                }
             }
             Extension(ref ext, node) => {
                 let subtree_hash = node.hash(hashers);
                 let encoding =
                     rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![ext.clone(), subtree_hash.clone()]);
+
                 // Only hash if the encoder output is less than 32 bytes.
                 if encoding.len() > 32 {
                     let mut hasher = Keccak256::new();
@@ -42,15 +49,20 @@ impl Hashable for Node {
                 }
             }
             FullNode(ref nodes) => {
-                /* XXX placeholder, incorrect */
                 let mut keys = Vec::new();
                 for node in nodes {
                     keys.push(node.hash(hashers));
                 }
                 let encoding = rlp::encode_list::<Vec<u8>, Vec<u8>>(&keys[..]);
-                let mut hasher = Keccak256::new();
-                hasher.input(&encoding);
-                Vec::<u8>::from(&hasher.result()[..])
+
+                // Only hash if the encoder output is less than 32 bytes.
+                if encoding.len() > 32 {
+                    let mut hasher = Keccak256::new();
+                    hasher.input(&encoding);
+                    Vec::<u8>::from(&hasher.result()[..])
+                } else {
+                    encoding
+                }
             }
             Hash(hridx, _, _) => {
                 let res = hashers[*hridx].clone().result();
@@ -138,7 +150,6 @@ fn step(
                             for _ in 1..digit {
                                 hashers[*hasher_num].input(b"");
                             }
-                            /* XXX if serialization length is < 32, input that directly */
                             let el1_hash = el1.hash(&mut hashers);
                             hashers[*hasher_num].input(el1_hash);
 
@@ -289,5 +300,75 @@ mod tests {
                 ]))
             )
         )
+    }
+
+    #[test]
+    fn single_value_hash() {
+        let mut hashers = Vec::new();
+        assert_eq!(
+            Leaf(vec![1, 2, 3], vec![4, 5, 6]).hash(&mut hashers),
+            vec![200, 131, 1, 2, 3, 131, 4, 5, 6]
+        );
+    }
+
+    #[test]
+    fn big_value_single_key_hash() {
+        let mut hashers = Vec::new();
+        assert_eq!(
+            Leaf(vec![0u8; 32], vec![4, 5, 6]).hash(&mut hashers),
+            vec![
+                0, 77, 126, 218, 113, 171, 7, 238, 113, 12, 152, 238, 20, 175, 97, 155, 196, 30,
+                204, 126, 160, 234, 193, 58, 113, 98, 12, 214, 67, 79, 220, 254
+            ]
+        );
+    }
+
+    #[test]
+    fn big_value_single_big_key_hash() {
+        let mut hashers = Vec::new();
+        assert_eq!(
+            Leaf(vec![0u8; 32], vec![1u8; 32]).hash(&mut hashers),
+            vec![
+                39, 97, 78, 243, 73, 225, 199, 242, 196, 228, 21, 194, 103, 85, 166, 247, 138, 229,
+                54, 32, 16, 17, 243, 46, 71, 115, 81, 139, 131, 214, 203, 184
+            ]
+        );
+    }
+
+    #[test]
+    fn empty_value_hash() {
+        let mut hashers = Vec::new();
+        let node = EmptySlot;
+        assert_eq!(node.hash(&mut hashers), vec![]);
+    }
+
+    #[test]
+    fn full_node_hash() {
+        let mut hashers = Vec::new();
+        assert_eq!(
+            FullNode(vec![
+                Leaf(vec![], vec![4, 5, 6]),
+                EmptySlot,
+                Leaf(vec![9], vec![10, 11, 12]),
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot
+            ])
+            .hash(&mut hashers),
+            vec![
+                220, 134, 197, 128, 131, 4, 5, 6, 128, 134, 197, 9, 131, 10, 11, 12, 128, 128, 128,
+                128, 128, 128, 128, 128, 128, 128, 128, 128, 128
+            ]
+        );
     }
 }
