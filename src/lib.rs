@@ -28,6 +28,19 @@ impl Hashable for Node {
                 hasher.input(&encoding);
                 Vec::<u8>::from(&hasher.result()[..])
             }
+            Extension(ref ext, node) => {
+                let subtree_hash = node.hash(hashers);
+                let encoding =
+                    rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![ext.clone(), subtree_hash.clone()]);
+                // Only hash if the encoder output is less than 32 bytes.
+                if encoding.len() > 32 {
+                    let mut hasher = Keccak256::new();
+                    hasher.input(&encoding);
+                    Vec::<u8>::from(&hasher.result()[..])
+                } else {
+                    encoding
+                }
+            }
             FullNode(ref nodes) => {
                 /* XXX placeholder, incorrect */
                 let mut keys = Vec::new();
@@ -230,6 +243,51 @@ mod tests {
                 EmptySlot,
                 EmptySlot
             ])
+        )
+    }
+
+    #[test]
+    fn tree_with_extension() {
+        let mut stack = Vec::new();
+        let mut hashers = Vec::new();
+        let out = step(
+            &mut stack,
+            vec![
+                (vec![1, 2, 3], vec![4, 5, 6]),
+                (vec![7, 8, 9], vec![10, 11, 12]),
+            ],
+            vec![
+                LEAF(0),
+                BRANCH(0),
+                LEAF(1),
+                ADD(2),
+                EXTENSION(vec![13, 14, 15]),
+            ],
+            &mut hashers,
+        );
+        assert_eq!(
+            out,
+            Extension(
+                vec![13, 14, 15],
+                Box::new(FullNode(vec![
+                    Leaf(vec![], vec![4, 5, 6]),
+                    EmptySlot,
+                    Leaf(vec![9], vec![10, 11, 12]),
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot
+                ]))
+            )
         )
     }
 }
