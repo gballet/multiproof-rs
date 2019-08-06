@@ -68,7 +68,6 @@ impl Hashable for Node {
                 let res = hashers[*hridx].clone().result();
                 Vec::<u8>::from(&res[..])
             }
-            _ => panic!("Attemped to hash invalid type"),
         }
     }
 }
@@ -162,7 +161,6 @@ fn step(
                     panic!("Could not find enough parameters to ADD")
                 }
             }
-            _ => panic!("Unsupported instruction"),
         }
     }
 
