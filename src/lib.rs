@@ -167,6 +167,17 @@ fn step(
     stack.pop().unwrap()
 }
 
+fn bytes2nibbles(bytes: Vec<u8>) -> Vec<u8> {
+    let mut key = Vec::<u8>::new();
+    for nibble in 0..2 * bytes.len() {
+        let nibble_shift = (nibble % 2) * 4;
+
+        key.push((bytes[nibble / 2] >> nibble_shift) & 0xF);
+    }
+
+    return key;
+}
+
 #[cfg(test)]
 mod tests {
     use super::Instruction::*;
@@ -367,6 +378,15 @@ mod tests {
                 220, 134, 197, 128, 131, 4, 5, 6, 128, 134, 197, 9, 131, 10, 11, 12, 128, 128, 128,
                 128, 128, 128, 128, 128, 128, 128, 128, 128, 128
             ]
+        );
+    }
+
+
+    #[test]
+    fn test_bytes2nibbles() {
+        assert_eq!(
+            bytes2nibbles(vec![0xde, 0xea, 0xbe, 0xef]),
+            vec![0xe, 0xd, 0xa, 0xe, 0xe, 0xb, 0xf, 0xe]
         );
     }
 }

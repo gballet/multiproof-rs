@@ -9,3 +9,6 @@ edition = "2018"
 [dependencies]
 sha3 = "0.8.2"
 rlp = "0.4.2"
+
+[dev-dependencies]
+hex = "0.3.2"
