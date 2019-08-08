@@ -167,15 +167,32 @@ fn step(
     stack.pop().unwrap()
 }
 
-fn bytes2nibbles(bytes: Vec<u8>) -> Vec<u8> {
-    let mut key = Vec::<u8>::new();
+fn bytes2nibbles(bytes: &[u8]) -> Vec<u8> {
+    let mut nibbles = Vec::<u8>::new();
     for nibble in 0..2 * bytes.len() {
         let nibble_shift = (1 - nibble % 2) * 4;
 
-        key.push((bytes[nibble / 2] >> nibble_shift) & 0xF);
+        nibbles.push((bytes[nibble / 2] >> nibble_shift) & 0xF);
     }
 
-    return key;
+    return nibbles;
+}
+
+fn nibbles2bytes(nibbles: &[u8]) -> Vec<u8> {
+	let mut result = Vec::<u8>::new();
+	let mut saved = 0u8;
+	for (i, nibble) in nibbles.iter().enumerate() {
+		if i % 2 == 0 {
+			saved = nibble << 4;
+		} else {
+			result.push(saved | (nibble & 0xF));
+		}
+	}
+	// Add the odd byte
+	if nibbles.len() % 2 != 0 {
+		result.push(saved);
+	}
+	result
 }
 
 #[cfg(test)]
@@ -384,9 +401,16 @@ mod tests {
 
     #[test]
     fn test_bytes2nibbles() {
+        let bytes = vec![0xde, 0xad, 0xbe, 0xef];
         assert_eq!(
-            bytes2nibbles(vec![0xde, 0xad, 0xbe, 0xef]),
+            bytes2nibbles(&bytes),
             vec![0xd, 0xe, 0xa, 0xd, 0xb, 0xe, 0xe, 0xf]
         );
+    }
+
+    #[test]
+    fn test_nibble2bytes() {
+        let nibbles = vec![0xd, 0xe, 0xa, 0xd, 0xb, 0xe, 0xe, 0xf];
+        assert_eq!(nibbles2bytes(&nibbles), vec![0xde, 0xad, 0xbe, 0xef]);
     }
 }
