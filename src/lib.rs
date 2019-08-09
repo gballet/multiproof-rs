@@ -196,6 +196,124 @@ fn nibbles2bytes(nibbles: &[u8]) -> Vec<u8> {
     result
 }
 
+// Helper function to build a tree based on its values
+fn build_tree(keyvals: &Vec<(Vec<u8>, Vec<u8>)>) -> Node {
+    use Node::*;
+
+    let mut root = vec![EmptySlot; 16];
+
+    let mut key2val = BTreeMap::<Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>>::new();
+
+    for (k, val) in keyvals.iter() {
+        let nibble_key = bytes2nibbles(&k);
+        for keylength in 0..64 {
+            let mut key = vec![0u8; 64 - keylength];
+            key.copy_from_slice(&nibble_key[..64 - keylength]);
+
+            if key2val.contains_key(&key) {
+                if let Some(_keys) = key2val.get_mut(&key) {
+                    _keys.push((key, val.clone()));
+                }
+            } else {
+                key2val.insert(key, vec![(k.clone(), val.clone())]);
+            }
+        }
+    }
+
+    let mut parents = BTreeMap::new(); // node -> parent map
+
+    // Look for extension nodes&leaves
+    for (k, v) in key2val.clone() {
+        if k.len() > 0 {
+            // Remove redundant values
+            for n in 1..k.len() {
+                let parent = &k[..k.len() - n];
+
+                
+                if key2val[parent].len() != v.len() {
+                    let mut parentkey = vec![0u8; parent.len()];
+                    parentkey.copy_from_slice(parent);
+                    parents.insert(k.clone(), parentkey);
+                    break;
+                }
+            }
+
+            // Add root if no key was found
+            if !parents.contains_key(&k) {
+                parents.insert(k.clone(), Vec::<u8>::new());
+            }
+        }
+    }
+    parents.insert(vec![0u8; 0], vec![0u8; 0]);
+
+    let mut initial_nodes = BTreeMap::<&[u8], Vec<(u8, Node)>>::new();
+    for (k, v) in keyvals.iter() {
+        let nkey = bytes2nibbles(&k);
+        let parent = &parents[&nkey];
+        let keylength = nkey.len() - parent.len();
+        let mut leafkey = vec![0u8; keylength - 1];
+        leafkey.copy_from_slice(&nkey[nkey.len() - keylength + 1..]);
+
+        if initial_nodes.contains_key(&parent[..]) {
+            let mut vec = initial_nodes.get_mut(&parent[..]).unwrap();
+            vec.push((nkey[nkey.len() - keylength], Leaf(leafkey, v.to_vec())));
+        } else {
+            initial_nodes.insert(
+                &parent[..],
+                vec![(nkey[nkey.len() - keylength], Leaf(leafkey, v.to_vec()))],
+            );
+        }
+    }
+    // Insert the root node, which is expected in the main loop
+    initial_nodes.insert(&[], vec![(16, FullNode(vec![EmptySlot; 16]))]);
+
+    let mut node_list = initial_nodes.clone();
+
+    while node_list.len() > 1 {
+        let mut next_list = BTreeMap::<&[u8], Vec<(u8, Node)>>::new();
+        for (k, v) in node_list.iter_mut() {
+            // Special case of the root node, that has no parent but
+            // should be in the next iteration.
+            if k.len() == 0 {
+                next_list.insert(k, v.to_vec());
+                continue;
+            }
+            // 1. Get the parent key, calculate the selector
+
+            // parent part = key length - parent length + selector
+            let parent = &parents[&k.to_vec()];
+
+            let sel = k[parent.len()];
+
+            let mut fullnode = vec![EmptySlot; 16];
+            for (selector, child_node) in v.iter_mut() {
+                assert!(*selector == 16 || fullnode[*selector as usize] == EmptySlot);
+                fullnode[*selector as usize] = child_node.clone();
+            }
+
+            // Merge the list into a list of FullNode siblings, and
+            // insert it.
+            if next_list.contains_key(&parent[..]) {
+                // parent is an internal node
+                let mut siblings = next_list[&parent[..]].clone();
+                siblings.push((sel, FullNode(fullnode)));
+                next_list.insert(parent, siblings);
+            } else {
+                // parent is the root node, so just update
+                for (i, n) in fullnode.iter().enumerate() {
+                    if root[i] == EmptySlot && *n != EmptySlot {
+                        root[i] = n.clone()
+                    }
+                }
+            };
+        }
+        node_list.clear();
+        node_list.append(&mut next_list);
+    }
+
+    FullNode(root)
+}
+
 #[cfg(test)]
 mod tests {
     use super::Instruction::*;
