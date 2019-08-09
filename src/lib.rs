@@ -2,6 +2,7 @@ extern crate rlp;
 extern crate sha3;
 
 use sha3::{Digest, Keccak256};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq)]
 enum Node {
@@ -179,20 +180,20 @@ fn bytes2nibbles(bytes: &[u8]) -> Vec<u8> {
 }
 
 fn nibbles2bytes(nibbles: &[u8]) -> Vec<u8> {
-	let mut result = Vec::<u8>::new();
-	let mut saved = 0u8;
-	for (i, nibble) in nibbles.iter().enumerate() {
-		if i % 2 == 0 {
-			saved = nibble << 4;
-		} else {
-			result.push(saved | (nibble & 0xF));
-		}
-	}
-	// Add the odd byte
-	if nibbles.len() % 2 != 0 {
-		result.push(saved);
-	}
-	result
+    let mut result = Vec::<u8>::new();
+    let mut saved = 0u8;
+    for (i, nibble) in nibbles.iter().enumerate() {
+        if i % 2 == 0 {
+            saved = nibble << 4;
+        } else {
+            result.push(saved | (nibble & 0xF));
+        }
+    }
+    // Add the odd byte
+    if nibbles.len() % 2 != 0 {
+        result.push(saved);
+    }
+    result
 }
 
 #[cfg(test)]
