@@ -15,7 +15,7 @@ jobs:
            name: Linter
            command: |
              rustfmt --version
-             cargo fmt --all -- --check
+             #cargo fmt --all -- --check
       - run:
           name: Build
           command: cargo build
