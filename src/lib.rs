@@ -4,7 +4,6 @@ extern crate rlp;
 extern crate sha3;
 
 use sha3::{Digest, Keccak256};
-use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq)]
 enum Node {
@@ -91,6 +90,7 @@ fn step(
 ) -> Node {
     use Instruction::*;
     use Node::*;
+    use std::collections::BTreeMap;
 
     let mut keyvalidx = 0;
     for instr in instructions {
@@ -198,6 +198,7 @@ fn nibbles2bytes(nibbles: &[u8]) -> Vec<u8> {
     result
 }
 
+// Utility function to find the length of the common prefix of two keys
 fn find_common_length(s1: &[u8], s2: &[u8]) -> usize {
 	let (longuest, shortest) = if s1.len() > s2.len() {
 		(s1,s2)
@@ -206,7 +207,6 @@ fn find_common_length(s1: &[u8], s2: &[u8]) -> usize {
 	};
 	let mut firstdiffindex = shortest.len();
     for (i, &n) in shortest.iter().enumerate() {
-		println!("{}", i);
 		if n != longuest[i] {
 			firstdiffindex = i as usize;
 			break;
@@ -216,20 +216,20 @@ fn find_common_length(s1: &[u8], s2: &[u8]) -> usize {
 	firstdiffindex
 }
 
+// Insert a `(key,value)` pair into a (sub-)tree represented by `root`.
+// It returns the root of the updated (sub-)tree.
 fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node, String> {
     use Node::*;
+
+    if key.len() == 0 {
+		return Err("Attempted to insert a 0-byte key".to_string());
+	}
 
     match root {
         Leaf(leafkey, leafvalue) => {
             // Find the common part of the current key with that of the
             // leaf and create an intermediate full node.
-            let mut firstdiffindex = 0;
-            for (i, &n) in key.iter().enumerate() {
-                if n != leafkey[i] {
-                    firstdiffindex = i as usize;
-                    break;
-                }
-            }
+            let firstdiffindex = find_common_length(&key, &leafkey);
 
             // Return an error if the leaf is already present.
             if firstdiffindex == key.len() {
@@ -257,10 +257,8 @@ fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node, St
         }
         Extension(extkey, box child) => {
             // Find the common part of the current key with that of the
-            // leaf and create an intermediate full node.
+            // extension and create an intermediate full node.
             let firstdiffindex = find_common_length(&key, &extkey);
-
-			println!("first diff index={} {} {}", firstdiffindex, extkey.len(), key.len());
 			
 			assert!(firstdiffindex <= extkey.len());
 			assert!(firstdiffindex <= key.len());
@@ -285,8 +283,10 @@ fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node, St
                     Extension(extkey[1..].to_vec(), Box::new(child.clone()))
                 };
 
-                // Create the entry for the node
-                // XXX check for length > 1
+                // Create the entry for the node. If there was only a
+                // difference of one byte, that byte will be consumed by
+                // the fullnode and therefore the key in the leaf will be
+                // an empty slice `[]`.
                 res[key[0] as usize] = Leaf(key[1..].to_vec(), value);
 
                 return Ok(FullNode(res));
@@ -334,6 +334,15 @@ mod tests {
     use super::Node::*;
     use super::*;
 
+    use rand::prelude::*;
+    
+    #[test]
+    fn insert_leaf_zero_length_key_after_fullnode() {
+		let mut root = Extension(vec![0u8; 31], Box::new(FullNode(vec![EmptySlot, Leaf(vec![], vec![0u8; 32]), EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot])));
+		let out = insert_leaf(&mut root, vec![0u8; 32], vec![1u8; 32]).unwrap();
+		assert_eq!(out, Extension(vec![0u8; 31], Box::new(FullNode(vec![Leaf(vec![], vec![1u8; 32]), Leaf(vec![], vec![0u8; 32]), EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot]))));
+	}
+    
     #[test]
 	fn insert_leaf_into_extension_root_all_bytes_in_key_common() {
 		let mut root = Extension(vec![0xd, 0xe, 0xa, 0xd], Box::new(Leaf(vec![0u8; 28], vec![1u8; 32])));
@@ -429,7 +438,7 @@ mod tests {
 
     #[test]
     fn insert_leaf_into_empty_root() {
-        let mut children = vec![EmptySlot; 16];
+        let children = vec![EmptySlot; 16];
         let mut root = FullNode(children);
         let out = insert_leaf(&mut root, vec![0u8; 32], vec![1u8; 32]);
         assert_eq!(
