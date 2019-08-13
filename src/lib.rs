@@ -74,6 +74,7 @@ impl Hashable for Node {
     }
 }
 
+#[derive(Debug)]
 enum Instruction {
     BRANCH(usize),
     HASHER(usize),
@@ -325,6 +326,75 @@ fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node, St
     }
 }
 
+// Helper function that generates a multiproof based on one `(key.value)`
+// pair.
+fn make_multiproof(root: &Node, keyvals: Vec<(Vec<u8>, Vec<u8>)>) -> Result<(Vec<Instruction>, Vec<Vec<u8>>, Vec<Vec<u8>>), String> {
+	use Node::*;
+
+	let mut instructions = Vec::new();
+	let mut values = Vec::new();
+	let mut hashes = Vec::new();
+	
+	// Recurse into each node, follow the trace
+	match root {
+		EmptySlot => return Err("Cannot build a multiproof on an empty slot".to_string()),
+		FullNode(ref vec) => {
+			// Split the current (key,value) tuples based on the first
+			// nibble of their keys. Build a recursion table.
+			let mut split = vec![Vec::new(); 16];
+			for (k,v) in keyvals.iter() {
+				let idx = k[0] as usize;
+				split[idx].push((k[1..].to_vec(), v.to_vec()));
+			}
+
+			// Now recurse on each selector. If the recursion table is
+			// empty, then the subnode needs to be hashed. Otherwise,
+			// we must recurse.
+			for (selector, subkeys) in split.iter().enumerate() {
+				if split[selector].len() == 0 {
+					// Empty slots are not to be hashed
+					if vec[selector] != EmptySlot {
+						hashes.push(vec[selector].hash(&mut vec![]));
+					}
+				} else {
+					let (mut i, mut h, mut v) = make_multiproof(&vec[selector], subkeys.to_vec())?;
+					instructions.append(&mut i);
+					hashes.append(&mut h);
+					values.append(&mut v);
+				}
+			}
+		}
+		Leaf(leafkey, leafvalue) => {
+			if keyvals.len() != 1 {
+				return Err(format!("Expecting exactly 1 key in leaf, got {}: {:?}", keyvals.len(), keyvals).to_string());
+			}
+
+			let key = &keyvals[0].0;
+			if leafkey == key {
+				instructions.push(Instruction::LEAF(leafkey.len()));
+				values.push(leafvalue.clone());
+			} else {
+				return Err(format!("Trying to apply the wrong key {:?} != {:?}", key, leafkey).to_string());
+			}
+		}
+		Extension(extkey, box child) => {
+			// Make sure that all the keys follow the extension and
+			// if so, then recurse.
+			let mut truncated = vec![];
+			for (k,v) in keyvals.iter() {
+				if &k[..extkey.len()] != &extkey[..] {
+					return Err(format!("One of the keys isn't present in the tree: {:?}", k).to_string());
+				}
+				truncated.push((k.to_vec(), v.to_vec()));
+			}
+			let (i, h, v) = make_multiproof(child, truncated)?;
+		}
+		Hash(_,_,_) => return Err("Should not have encountered a Hash in this context".to_string()),
+	}
+	
+	Ok((instructions, hashes, values))
+}
+
 #[cfg(test)]
 mod tests {
     extern crate hex;
@@ -333,8 +403,16 @@ mod tests {
     use super::Instruction::*;
     use super::Node::*;
     use super::*;
-
     use rand::prelude::*;
+    
+    #[test]
+    fn make_multiproof_single_value() {
+		let mut root = FullNode(vec![EmptySlot; 16]);
+		insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]);
+		insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]);
+		
+		let (i, h, v) = make_multiproof(&root, vec![(vec![1u8; 32], vec![1u8; 32])]).unwrap();
+	}
     
     #[test]
     fn insert_leaf_zero_length_key_after_fullnode() {
@@ -386,8 +464,7 @@ mod tests {
 
 	#[test]
 	fn insert_leaf_into_leaf_root_common_bytes_in_key() {
-		let mut key = vec![0u8; 32];
-		for (i, mut v) in key.iter_mut().enumerate() {
+		let mut key = vec![0u8; 32];		for (i, mut v) in key.iter_mut().enumerate() {
 			
 			if i >= 16 {
 				break;
