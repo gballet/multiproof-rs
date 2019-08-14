@@ -334,7 +334,13 @@ fn make_multiproof(root: &Node, keyvals: Vec<(Vec<u8>, Vec<u8>)>) -> Result<(Vec
 	let mut instructions = Vec::new();
 	let mut values = Vec::new();
 	let mut hashes = Vec::new();
-	
+
+	// If there are no keys specified at this node, then just hash that
+	// node.
+	if keyvals.len() == 0 {
+		return Ok((vec![Instruction::HASHER(0)], vec![root.hash(&mut vec![])], vec![]));
+	}
+
 	// Recurse into each node, follow the trace
 	match root {
 		EmptySlot => return Err("Cannot build a multiproof on an empty slot".to_string()),
@@ -350,15 +356,28 @@ fn make_multiproof(root: &Node, keyvals: Vec<(Vec<u8>, Vec<u8>)>) -> Result<(Vec
 			// Now recurse on each selector. If the recursion table is
 			// empty, then the subnode needs to be hashed. Otherwise,
 			// we must recurse.
+			// `branch` is set to true at first, which is meant to add
+			// a `BRANCH` instruction the first time that a child is
+			// added to the node. All subsequent adds will be performed
+			// by an `ADD` instruction.
+			let mut branch = true;
 			for (selector, subkeys) in split.iter().enumerate() {
 				if split[selector].len() == 0 {
 					// Empty slots are not to be hashed
 					if vec[selector] != EmptySlot {
+						instructions.push(Instruction::HASHER(0));
+						instructions.push(Instruction::ADD(selector));
 						hashes.push(vec[selector].hash(&mut vec![]));
 					}
 				} else {
 					let (mut i, mut h, mut v) = make_multiproof(&vec[selector], subkeys.to_vec())?;
 					instructions.append(&mut i);
+					if branch {
+						instructions.push(Instruction::BRANCH(selector));
+						branch = false;
+					} else {
+						instructions.push(Instruction::ADD(selector));
+					}
 					hashes.append(&mut h);
 					values.append(&mut v);
 				}
@@ -372,7 +391,9 @@ fn make_multiproof(root: &Node, keyvals: Vec<(Vec<u8>, Vec<u8>)>) -> Result<(Vec
 			let key = &keyvals[0].0;
 			if leafkey == key {
 				instructions.push(Instruction::LEAF(leafkey.len()));
-				values.push(leafvalue.clone());
+				let leaf = vec![key.clone(), keyvals[0].1.clone()];
+				let rlp = rlp::encode_list::<Vec<u8>, Vec<u8>>(&leaf[..]);
+				values.push(rlp);
 			} else {
 				return Err(format!("Trying to apply the wrong key {:?} != {:?}", key, leafkey).to_string());
 			}
@@ -406,12 +427,87 @@ mod tests {
     use rand::prelude::*;
     
     #[test]
+    fn make_multiproof_two_values() {
+		let mut root = FullNode(vec![EmptySlot; 16]);
+		insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]);
+		insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]);
+		insert_leaf(&mut root, vec![8u8; 32], vec![150u8; 32]);
+		
+		let (i, h, v) = make_multiproof(&root, vec![(vec![2u8; 32], vec![4u8; 32]), (vec![1u8; 32], vec![8u8; 32])]).unwrap();
+		assert_eq!(i.len(), 6);			// [LEAF, BRANCH, LEAF, ADD, HASHER, ADD]
+		match i[0] {				// Key length is 31
+			LEAF(n) => assert_eq!(n, 31),
+			_ => panic!(format!("Invalid instruction {:?}", i[0]))
+		}
+		match i[1] {
+			BRANCH(n) => assert_eq!(n, 1),
+			_ => panic!(format!("Invalid instruction {:?}", i[1]))
+		}
+		match i[2] {				// Key length is 31
+			LEAF(n) => assert_eq!(n, 31),
+			_ => panic!(format!("Invalid instruction {:?}", i[2]))
+		}
+		match i[3] {
+			ADD(n) => assert_eq!(n, 2),
+			_ => panic!(format!("Invalid instruction {:?}", i[3]))
+		}
+		match i[5] {
+			ADD(n) => assert_eq!(n, 8),
+			_ => panic!(format!("Invalid instruction {:?}", i[5]))
+		}
+		assert_eq!(h.len(), 1);			// Only one hash
+		assert_eq!(v.len(), 2);
+		assert_eq!(v[0], rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![1u8; 31], vec![8u8; 32]][..]));
+		assert_eq!(v[1], rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![2u8; 31], vec![4u8; 32]][..]));
+	}
+    
+    #[test]
     fn make_multiproof_single_value() {
 		let mut root = FullNode(vec![EmptySlot; 16]);
 		insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]);
 		insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]);
 		
 		let (i, h, v) = make_multiproof(&root, vec![(vec![1u8; 32], vec![1u8; 32])]).unwrap();
+		assert_eq!(i.len(), 4);				// [LEAF, BRANCH, HASHER, ADD]
+		match i[0] {					// Key length is 31
+			LEAF(n) => assert_eq!(n, 31),
+			_ => panic!(format!("Invalid instruction {:?}", i[0]))
+		}
+		match i[1] {
+			BRANCH(n) => assert_eq!(n, 1),
+			_ => panic!(format!("Invalid instruction {:?}", i[1]))
+		}
+		match i[2] {
+			HASHER(n) => assert_eq!(n, 0),
+			_ => panic!(format!("Invalid instruction {:?}", i[2]))
+		}
+		match i[3] {
+			ADD(n) => assert_eq!(n, 2),
+			_ => panic!(format!("Invalid instruction {:?}", i[3]))
+		}
+		assert_eq!(h.len(), 1);				// Only one hash
+		assert_eq!(v.len(), 1);				// Only one value
+		assert_eq!(v[0], rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![1u8; 31], vec![1u8; 32]][..]));
+	}
+
+    #[test]
+    fn make_multiproof_no_values() {
+		let mut root = FullNode(vec![EmptySlot; 16]);
+		insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]);
+		insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]);
+		
+		let (i, h, v) = make_multiproof(&root, vec![]).unwrap();
+		assert_eq!(i.len(), 1);
+		assert_eq!(h.len(), 1);
+		assert_eq!(v.len(), 0);
+	}
+
+	#[test]
+	fn make_multiproof_empty_tree() {
+		let mut root = FullNode(vec![EmptySlot; 16]);
+		
+		let out = make_multiproof(&root, vec![(vec![1u8; 32], vec![1u8; 32])]);
+		assert!(out.is_err());
 	}
     
     #[test]
