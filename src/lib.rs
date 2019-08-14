@@ -201,20 +201,20 @@ fn nibbles2bytes(nibbles: &[u8]) -> Vec<u8> {
 
 // Utility function to find the length of the common prefix of two keys
 fn find_common_length(s1: &[u8], s2: &[u8]) -> usize {
-	let (longuest, shortest) = if s1.len() > s2.len() {
-		(s1,s2)
-	} else {
-		(s2,s1)
-	};
-	let mut firstdiffindex = shortest.len();
+    let (longuest, shortest) = if s1.len() > s2.len() {
+        (s1, s2)
+    } else {
+        (s2, s1)
+    };
+    let mut firstdiffindex = shortest.len();
     for (i, &n) in shortest.iter().enumerate() {
-		if n != longuest[i] {
-			firstdiffindex = i as usize;
-			break;
-		}
-	}
-	
-	firstdiffindex
+        if n != longuest[i] {
+            firstdiffindex = i as usize;
+            break;
+        }
+    }
+
+    firstdiffindex
 }
 
 // Insert a `(key,value)` pair into a (sub-)tree represented by `root`.
@@ -223,8 +223,8 @@ fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node, St
     use Node::*;
 
     if key.len() == 0 {
-		return Err("Attempted to insert a 0-byte key".to_string());
-	}
+        return Err("Attempted to insert a 0-byte key".to_string());
+    }
 
     match root {
         Leaf(leafkey, leafvalue) => {
@@ -419,159 +419,357 @@ fn make_multiproof(root: &Node, keyvals: Vec<(Vec<u8>, Vec<u8>)>) -> Result<(Vec
 #[cfg(test)]
 mod tests {
     extern crate hex;
-    extern crate rand;
+    //extern crate rand;
 
     use super::Instruction::*;
     use super::Node::*;
     use super::*;
-    use rand::prelude::*;
-    
+    //use rand::prelude::*;
+
     #[test]
     fn make_multiproof_two_values() {
-		let mut root = FullNode(vec![EmptySlot; 16]);
-		insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]);
-		insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]);
-		insert_leaf(&mut root, vec![8u8; 32], vec![150u8; 32]);
-		
-		let (i, h, v) = make_multiproof(&root, vec![(vec![2u8; 32], vec![4u8; 32]), (vec![1u8; 32], vec![8u8; 32])]).unwrap();
-		assert_eq!(i.len(), 6);			// [LEAF, BRANCH, LEAF, ADD, HASHER, ADD]
-		match i[0] {				// Key length is 31
-			LEAF(n) => assert_eq!(n, 31),
-			_ => panic!(format!("Invalid instruction {:?}", i[0]))
-		}
-		match i[1] {
-			BRANCH(n) => assert_eq!(n, 1),
-			_ => panic!(format!("Invalid instruction {:?}", i[1]))
-		}
-		match i[2] {				// Key length is 31
-			LEAF(n) => assert_eq!(n, 31),
-			_ => panic!(format!("Invalid instruction {:?}", i[2]))
-		}
-		match i[3] {
-			ADD(n) => assert_eq!(n, 2),
-			_ => panic!(format!("Invalid instruction {:?}", i[3]))
-		}
-		match i[5] {
-			ADD(n) => assert_eq!(n, 8),
-			_ => panic!(format!("Invalid instruction {:?}", i[5]))
-		}
-		assert_eq!(h.len(), 1);			// Only one hash
-		assert_eq!(v.len(), 2);
-		assert_eq!(v[0], rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![1u8; 31], vec![8u8; 32]][..]));
-		assert_eq!(v[1], rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![2u8; 31], vec![4u8; 32]][..]));
-	}
-    
+        let mut root = FullNode(vec![EmptySlot; 16]);
+        insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]);
+        insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]);
+        insert_leaf(&mut root, vec![8u8; 32], vec![150u8; 32]);
+
+        let (i, h, v) = make_multiproof(
+            &root,
+            vec![
+                (vec![2u8; 32], vec![4u8; 32]),
+                (vec![1u8; 32], vec![8u8; 32]),
+            ],
+        )
+        .unwrap();
+        assert_eq!(i.len(), 6); // [LEAF, BRANCH, LEAF, ADD, HASHER, ADD]
+        match i[0] {
+            // Key length is 31
+            LEAF(n) => assert_eq!(n, 31),
+            _ => panic!(format!("Invalid instruction {:?}", i[0])),
+        }
+        match i[1] {
+            BRANCH(n) => assert_eq!(n, 1),
+            _ => panic!(format!("Invalid instruction {:?}", i[1])),
+        }
+        match i[2] {
+            // Key length is 31
+            LEAF(n) => assert_eq!(n, 31),
+            _ => panic!(format!("Invalid instruction {:?}", i[2])),
+        }
+        match i[3] {
+            ADD(n) => assert_eq!(n, 2),
+            _ => panic!(format!("Invalid instruction {:?}", i[3])),
+        }
+        match i[5] {
+            ADD(n) => assert_eq!(n, 8),
+            _ => panic!(format!("Invalid instruction {:?}", i[5])),
+        }
+        assert_eq!(h.len(), 1); // Only one hash
+        assert_eq!(v.len(), 2);
+        assert_eq!(
+            v[0],
+            rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![1u8; 31], vec![8u8; 32]][..])
+        );
+        assert_eq!(
+            v[1],
+            rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![2u8; 31], vec![4u8; 32]][..])
+        );
+    }
+
     #[test]
     fn make_multiproof_single_value() {
-		let mut root = FullNode(vec![EmptySlot; 16]);
-		insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]);
-		insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]);
-		
-		let (i, h, v) = make_multiproof(&root, vec![(vec![1u8; 32], vec![1u8; 32])]).unwrap();
-		assert_eq!(i.len(), 4);				// [LEAF, BRANCH, HASHER, ADD]
-		match i[0] {					// Key length is 31
-			LEAF(n) => assert_eq!(n, 31),
-			_ => panic!(format!("Invalid instruction {:?}", i[0]))
-		}
-		match i[1] {
-			BRANCH(n) => assert_eq!(n, 1),
-			_ => panic!(format!("Invalid instruction {:?}", i[1]))
-		}
-		match i[2] {
-			HASHER(n) => assert_eq!(n, 0),
-			_ => panic!(format!("Invalid instruction {:?}", i[2]))
-		}
-		match i[3] {
-			ADD(n) => assert_eq!(n, 2),
-			_ => panic!(format!("Invalid instruction {:?}", i[3]))
-		}
-		assert_eq!(h.len(), 1);				// Only one hash
-		assert_eq!(v.len(), 1);				// Only one value
-		assert_eq!(v[0], rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![1u8; 31], vec![1u8; 32]][..]));
-	}
+        let mut root = FullNode(vec![EmptySlot; 16]);
+        insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]);
+        insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]);
+
+        let (i, h, v) = make_multiproof(&root, vec![(vec![1u8; 32], vec![1u8; 32])]).unwrap();
+        assert_eq!(i.len(), 4); // [LEAF, BRANCH, HASHER, ADD]
+        match i[0] {
+            // Key length is 31
+            LEAF(n) => assert_eq!(n, 31),
+            _ => panic!(format!("Invalid instruction {:?}", i[0])),
+        }
+        match i[1] {
+            BRANCH(n) => assert_eq!(n, 1),
+            _ => panic!(format!("Invalid instruction {:?}", i[1])),
+        }
+        match i[2] {
+            HASHER(n) => assert_eq!(n, 0),
+            _ => panic!(format!("Invalid instruction {:?}", i[2])),
+        }
+        match i[3] {
+            ADD(n) => assert_eq!(n, 2),
+            _ => panic!(format!("Invalid instruction {:?}", i[3])),
+        }
+        assert_eq!(h.len(), 1); // Only one hash
+        assert_eq!(v.len(), 1); // Only one value
+        assert_eq!(
+            v[0],
+            rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![1u8; 31], vec![1u8; 32]][..])
+        );
+    }
 
     #[test]
     fn make_multiproof_no_values() {
-		let mut root = FullNode(vec![EmptySlot; 16]);
-		insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]);
-		insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]);
-		
-		let (i, h, v) = make_multiproof(&root, vec![]).unwrap();
-		assert_eq!(i.len(), 1);
-		assert_eq!(h.len(), 1);
-		assert_eq!(v.len(), 0);
-	}
+        let mut root = FullNode(vec![EmptySlot; 16]);
+        insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]);
+        insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]);
 
-	#[test]
-	fn make_multiproof_empty_tree() {
-		let mut root = FullNode(vec![EmptySlot; 16]);
-		
-		let out = make_multiproof(&root, vec![(vec![1u8; 32], vec![1u8; 32])]);
-		assert!(out.is_err());
-	}
-    
+        let (i, h, v) = make_multiproof(&root, vec![]).unwrap();
+        assert_eq!(i.len(), 1);
+        assert_eq!(h.len(), 1);
+        assert_eq!(v.len(), 0);
+    }
+
+    #[test]
+    fn make_multiproof_empty_tree() {
+        let mut root = FullNode(vec![EmptySlot; 16]);
+
+        let out = make_multiproof(&root, vec![(vec![1u8; 32], vec![1u8; 32])]);
+        assert!(out.is_err());
+    }
+
     #[test]
     fn insert_leaf_zero_length_key_after_fullnode() {
-		let mut root = Extension(vec![0u8; 31], Box::new(FullNode(vec![EmptySlot, Leaf(vec![], vec![0u8; 32]), EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot])));
-		let out = insert_leaf(&mut root, vec![0u8; 32], vec![1u8; 32]).unwrap();
-		assert_eq!(out, Extension(vec![0u8; 31], Box::new(FullNode(vec![Leaf(vec![], vec![1u8; 32]), Leaf(vec![], vec![0u8; 32]), EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot]))));
-	}
-    
+        let mut root = Extension(
+            vec![0u8; 31],
+            Box::new(FullNode(vec![
+                EmptySlot,
+                Leaf(vec![], vec![0u8; 32]),
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+            ])),
+        );
+        let out = insert_leaf(&mut root, vec![0u8; 32], vec![1u8; 32]).unwrap();
+        assert_eq!(
+            out,
+            Extension(
+                vec![0u8; 31],
+                Box::new(FullNode(vec![
+                    Leaf(vec![], vec![1u8; 32]),
+                    Leaf(vec![], vec![0u8; 32]),
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot
+                ]))
+            )
+        );
+    }
+
     #[test]
-	fn insert_leaf_into_extension_root_all_bytes_in_key_common() {
-		let mut root = Extension(vec![0xd, 0xe, 0xa, 0xd], Box::new(Leaf(vec![0u8; 28], vec![1u8; 32])));
-		let mut key = vec![1u8; 32];
-		key[0] = 0xd;
-		key[1] = 0xe;
-		key[2] = 0xa;
-		key[3] = 0xd;
-		let out = insert_leaf(&mut root, key, vec![1u8;32]).unwrap();
-		assert_eq!(out, Extension(vec![0xd, 0xe, 0xa, 0xd], Box::new(FullNode(vec![Leaf(vec![0u8; 27], vec![1u8; 32]), Leaf(vec![1u8; 27], vec![1u8; 32]), EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot]))));
-	}
+    fn insert_leaf_into_extension_root_all_bytes_in_key_common() {
+        let mut root = Extension(
+            vec![0xd, 0xe, 0xa, 0xd],
+            Box::new(Leaf(vec![0u8; 28], vec![1u8; 32])),
+        );
+        let mut key = vec![1u8; 32];
+        key[0] = 0xd;
+        key[1] = 0xe;
+        key[2] = 0xa;
+        key[3] = 0xd;
+        let out = insert_leaf(&mut root, key, vec![1u8; 32]).unwrap();
+        assert_eq!(
+            out,
+            Extension(
+                vec![0xd, 0xe, 0xa, 0xd],
+                Box::new(FullNode(vec![
+                    Leaf(vec![0u8; 27], vec![1u8; 32]),
+                    Leaf(vec![1u8; 27], vec![1u8; 32]),
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot
+                ]))
+            )
+        );
+    }
 
-	#[test]
-	fn insert_leaf_into_extension_root_no_common_bytes_in_key() {
-		let mut root = Extension(vec![0xd, 0xe, 0xa, 0xd], Box::new(Leaf(vec![0u8; 24], vec![1u8; 32])));
-		let out = insert_leaf(&mut root, vec![2u8; 32], vec![1u8;32]).unwrap();
-		assert_eq!(out, FullNode(vec![EmptySlot, EmptySlot, Leaf(vec![2u8;31], vec![1u8;32]), EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, Extension(vec![14, 10, 13], Box::new(Leaf(vec![0u8; 24], vec![1u8; 32]))), EmptySlot, EmptySlot]));
-	}
-	
-	#[test]
-	fn insert_leaf_into_extension_root_half_bytes_in_key_common() {
-		let mut root = Extension(vec![0xd, 0xe, 0xa, 0xd], Box::new(Leaf(vec![0u8; 28], vec![1u8; 32])));
-		let mut key = vec![0u8; 32];
-		key[0] = 0xd;
-		key[1] = 0xe;
-		let out = insert_leaf(&mut root, key, vec![1u8;32]).unwrap();
-		assert_eq!(out, Extension(vec![0xd, 0xe], Box::new(FullNode(vec![Leaf(vec![0u8; 29], vec![1u8; 32]), EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot,
-			Extension(vec![0xd], Box::new(Leaf(vec![0u8; 28], vec![1u8; 32]))), EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot]))));
-	}
+    #[test]
+    fn insert_leaf_into_extension_root_no_common_bytes_in_key() {
+        let mut root = Extension(
+            vec![0xd, 0xe, 0xa, 0xd],
+            Box::new(Leaf(vec![0u8; 24], vec![1u8; 32])),
+        );
+        let out = insert_leaf(&mut root, vec![2u8; 32], vec![1u8; 32]).unwrap();
+        assert_eq!(
+            out,
+            FullNode(vec![
+                EmptySlot,
+                EmptySlot,
+                Leaf(vec![2u8; 31], vec![1u8; 32]),
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                Extension(
+                    vec![14, 10, 13],
+                    Box::new(Leaf(vec![0u8; 24], vec![1u8; 32]))
+                ),
+                EmptySlot,
+                EmptySlot
+            ])
+        );
+    }
 
-	#[test]
-	fn insert_leaf_into_extension_root_almost_all_bytes_in_key_common() {
-		let mut root = Extension(vec![0xd, 0xe, 0xa, 0xd], Box::new(Leaf(vec![0u8; 28], vec![1u8; 32])));
-		let mut key = vec![0u8; 32];
-		key[0] = 0xd;
-		key[1] = 0xe;
-		key[2] = 0xa;
-		let out = insert_leaf(&mut root, key, vec![1u8;32]).unwrap();
-		assert_eq!(out, Extension(vec![0xd, 0xe, 0xa], Box::new(FullNode(vec![Leaf(vec![0u8; 28], vec![1u8; 32]), EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, Leaf(vec![0u8; 28], vec![1u8; 32]), EmptySlot, EmptySlot]))));
-	}
+    #[test]
+    fn insert_leaf_into_extension_root_half_bytes_in_key_common() {
+        let mut root = Extension(
+            vec![0xd, 0xe, 0xa, 0xd],
+            Box::new(Leaf(vec![0u8; 28], vec![1u8; 32])),
+        );
+        let mut key = vec![0u8; 32];
+        key[0] = 0xd;
+        key[1] = 0xe;
+        let out = insert_leaf(&mut root, key, vec![1u8; 32]).unwrap();
+        assert_eq!(
+            out,
+            Extension(
+                vec![0xd, 0xe],
+                Box::new(FullNode(vec![
+                    Leaf(vec![0u8; 29], vec![1u8; 32]),
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    Extension(vec![0xd], Box::new(Leaf(vec![0u8; 28], vec![1u8; 32]))),
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot
+                ]))
+            )
+        );
+    }
 
-	#[test]
-	fn insert_leaf_into_leaf_root_common_bytes_in_key() {
-		let mut key = vec![0u8; 32];		for (i, mut v) in key.iter_mut().enumerate() {
-			
-			if i >= 16 {
-				break;
-			}
-			*v = 2u8;
-		}
-		let mut root = Leaf(key, vec![1u8;32]);
-		let out = insert_leaf(&mut root, vec![2u8; 32], vec![1u8;32]).unwrap();
-		assert_eq!(out, Extension(vec![2u8; 16], Box::new(FullNode(vec![Leaf(vec![0u8;15], vec![1u8;32]),
-		EmptySlot,
-		Leaf(vec![2u8;15], vec![1u8;32]),
+    #[test]
+    fn insert_leaf_into_extension_root_almost_all_bytes_in_key_common() {
+        let mut root = Extension(
+            vec![0xd, 0xe, 0xa, 0xd],
+            Box::new(Leaf(vec![0u8; 28], vec![1u8; 32])),
+        );
+        let mut key = vec![0u8; 32];
+        key[0] = 0xd;
+        key[1] = 0xe;
+        key[2] = 0xa;
+        let out = insert_leaf(&mut root, key, vec![1u8; 32]).unwrap();
+        assert_eq!(
+            out,
+            Extension(
+                vec![0xd, 0xe, 0xa],
+                Box::new(FullNode(vec![
+                    Leaf(vec![0u8; 28], vec![1u8; 32]),
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    Leaf(vec![0u8; 28], vec![1u8; 32]),
+                    EmptySlot,
+                    EmptySlot
+                ]))
+            )
+        );
+    }
+
+    #[test]
+    fn insert_leaf_into_leaf_root_common_bytes_in_key() {
+        let mut key = vec![0u8; 32];
+        for (i, mut v) in key.iter_mut().enumerate() {
+            if i >= 16 {
+                break;
+            }
+            *v = 2u8;
+        }
+        let mut root = Leaf(key, vec![1u8; 32]);
+        let out = insert_leaf(&mut root, vec![2u8; 32], vec![1u8; 32]).unwrap();
+        assert_eq!(
+            out,
+            Extension(
+                vec![2u8; 16],
+                Box::new(FullNode(vec![
+                    Leaf(vec![0u8; 15], vec![1u8; 32]),
+                    EmptySlot,
+                    Leaf(vec![2u8; 15], vec![1u8; 32]),
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot
+                ]))
+            )
+        );
+    }
+
+    #[test]
+    fn insert_leaf_into_leaf_root_no_common_bytes_in_key() {
+        let mut root = Leaf(vec![1u8; 32], vec![1u8; 32]);
+        let out = insert_leaf(&mut root, vec![2u8; 32], vec![1u8; 32]).unwrap();
+        assert_eq!(
+            out,
+            FullNode(vec![
+                EmptySlot,
+                Leaf(vec![1u8; 31], vec![1u8; 32]),
+                Leaf(vec![2u8; 31], vec![1u8; 32]),
                 EmptySlot,
                 EmptySlot,
                 EmptySlot,
@@ -585,29 +783,9 @@ mod tests {
                 EmptySlot,
                 EmptySlot,
                 EmptySlot
-		]))));
-	}
-
-	#[test]
-	fn insert_leaf_into_leaf_root_no_common_bytes_in_key() {
-		let mut root = Leaf(vec![1u8;32], vec![1u8;32]);
-		let out = insert_leaf(&mut root, vec![2u8; 32], vec![1u8;32]).unwrap();
-		assert_eq!(out, FullNode(vec![EmptySlot, Leaf(vec![1u8;31], vec![1u8;32]), Leaf(vec![2u8;31], vec![1u8;32]),
-		EmptySlot,
-                EmptySlot,
-                EmptySlot,
-                EmptySlot,
-                EmptySlot,
-                EmptySlot,
-                EmptySlot,
-                EmptySlot,
-                EmptySlot,
-                EmptySlot,
-                EmptySlot,
-                EmptySlot,
-                EmptySlot
-		]));
-	}
+            ])
+        );
+    }
 
     #[test]
     fn insert_leaf_into_empty_root() {
@@ -894,7 +1072,6 @@ mod tests {
             ]
         );
     }
-
 
     #[test]
     fn test_bytes2nibbles() {
