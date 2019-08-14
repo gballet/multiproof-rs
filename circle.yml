@@ -9,6 +9,8 @@ jobs:
       - run:
            name: Setup environment
            command: |
+             rustup toolchain install nightly
+             rustup default nightly
              rustup component add rustfmt
              rustup update
       - run:
