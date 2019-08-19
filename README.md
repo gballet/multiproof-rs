@@ -40,7 +40,7 @@ let new_root = insert_leaf(&mut tree_root, vec![1u8; 32], vec![2u8; 32]).unwrap(
 
 ### Calculating hashes
 
-The `hash` function will walk the tree and calculate the hash representation. It must be passed a mutable list, to store the different hash contexts. This will be removed in a future iteration of the interface.
+The `hash` function will walk the tree and calculate the hash representation.
 
 ```rust
 let hash = new_root.hash(&mut vec![]);
@@ -48,12 +48,18 @@ let hash = new_root.hash(&mut vec![]);
 
 ### Creating the proof
 
-### Verifying proof
-
-Call the `step` function on the three components called by `make_proof`, plus the mutable hasher vector:
+Call `make_multiproof` with the root of the tree and the list of values to be changed. It returns a `Multiproof` object, which can be sent to the verifier over the network; The example below will create a proof for the replacement of the value of leaf `0x11...11` with `0x44..444`:
 
 ```rust
-step(&mut vec![], i, keyvals, &mut vec![])
+let proof = make_multiproof(new_root, vec![(vec![1u8; 32], vec![4u8; 32])]).unwrap();
+```
+
+### Verifying proof
+
+Call the `rebuild` function on the output of `make_proof`:
+
+```rust
+rebuild(&mut vec![], &proof)
 ```
 
 ### Examples

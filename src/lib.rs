@@ -7,7 +7,7 @@ use sha3::{Digest, Keccak256};
 
 #[derive(Debug, Clone, PartialEq)]
 enum Node {
-    Hash(usize, usize, usize), // (Item to hash, # of empty strings, total # of items)
+    Hash(Vec<u8>, usize), // (Hash, # empty spaces)
     Leaf(Vec<u8>, Vec<u8>),
     Extension(Vec<u8>, Box<Node>),
     FullNode(Vec<Node>),
@@ -66,9 +66,8 @@ impl Hashable for Node {
                     encoding
                 }
             }
-            Hash(hridx, _, _) => {
-                let res = hashers[*hridx].clone().result();
-                Vec::<u8>::from(&res[..])
+            Hash(h, nempty) => {
+                h.to_vec()
             }
         }
     }
@@ -83,44 +82,55 @@ enum Instruction {
     ADD(usize),
 }
 
-fn step(
+#[derive(Debug)]
+struct Multiproof {
+    pub hashes: Vec<Vec<u8>>,               // List of hashes in the proof
+    pub instructions: Vec<Instruction>,     // List of instructions in the proof
+    pub keyvals: Vec<Vec<u8>>               // List of RLP-encoded (key, value) pairs in the proof
+}
+
+// Rebuilds the tree based on the multiproof components
+fn rebuild(
     stack: &mut Vec<Node>,
-    keyvals: Vec<(Vec<u8>, Vec<u8>)>,
-    instructions: Vec<Instruction>,
-    mut hashers: &mut Vec<Keccak256>,
+    proof: &Multiproof,
 ) -> Node {
     use Instruction::*;
     use Node::*;
-    use std::collections::BTreeMap;
 
-    let mut keyvalidx = 0;
-    for instr in instructions {
+    let mut hiter = proof.hashes.iter();
+    let mut iiter = proof.instructions.iter();
+    let mut kviter = proof.keyvals.iter().map(|encoded| {
+        // Deserialize the keys as they are read
+        let keyval = rlp::decode_list::<Vec<u8>>(encoded);
+        if keyval.len() != 2 {
+            panic!("Incorrectly encoded (key, value) pair");
+        }
+        (keyval[0].clone(), keyval[1].clone())
+    });
+
+    for instr in iiter {
         match instr {
             HASHER(digit) => {
-                if let Some(item) = stack.pop() {
-                    let mut hasher = Keccak256::new();
-                    for _ in 1..digit {
-                        hasher.input(b"");
-                    }
-                    hasher.input(item.hash(&mut hashers));
-                    hashers.push(hasher);
-                    stack.push(Hash(hashers.len() - 1, 1 + digit, digit));
+                if let Some(h) = hiter.next() {
+                    stack.push(Hash(h.to_vec(), *digit));
                 } else {
-                    panic!("Could not pop a value from the stack, that is required for a HASHER")
+                    panic!("Proof requires one more hash in HASHER")
                 }
             }
             LEAF(keylength) => {
-                let (key, value) = &keyvals[keyvalidx];
-                stack.push(Leaf(
-                    (&key[key.len() - keylength..]).to_vec(),
-                    value.to_vec(),
-                ));
-                keyvalidx += 1;
+                if let Some((key, value)) = kviter.next() {
+                    stack.push(Leaf(
+                        (&key[key.len() - keylength..]).to_vec(),
+                        value.to_vec(),
+                    ));
+                } else {
+                    panic!("Proof requires one more (key,value) pair in LEAF");
+                }
             }
             BRANCH(digit) => {
                 if let Some(node) = stack.pop() {
                     let mut children = vec![Node::EmptySlot; 16];
-                    children[digit] = node;
+                    children[*digit] = node;
                     stack.push(FullNode(children))
                 } else {
                     panic!("Could not pop a value from the stack, that is required for a BRANCH")
@@ -128,7 +138,7 @@ fn step(
             }
             EXTENSION(key) => {
                 if let Some(node) = stack.pop() {
-                    stack.push(Extension(key, Box::new(node)));
+                    stack.push(Extension(key.to_vec(), Box::new(node)));
                 } else {
                     panic!("Could not find a node on the stack, that is required for an EXTENSION")
                 }
@@ -137,7 +147,7 @@ fn step(
                 if let (Some(el1), Some(el2)) = (stack.pop(), stack.last_mut()) {
                     match el2 {
                         FullNode(ref mut n2) => {
-                            if digit >= n2.len() {
+                            if *digit >= n2.len() {
                                 panic!(format!(
                                     "Incorrect full node index: {} > {}",
                                     digit,
@@ -147,18 +157,9 @@ fn step(
 
                             // A hash needs to be fed into the hash sponge, any other node is simply
                             // a child (el1) of the parent node (el2). this is done during resolve.
-                            n2[digit] = el1;
+                            n2[*digit] = el1;
                         }
-                        Hash(ref hasher_num, ref mut count, ref mut nempty) => {
-                            for _ in 1..digit {
-                                hashers[*hasher_num].input(b"");
-                            }
-                            let el1_hash = el1.hash(&mut hashers);
-                            hashers[*hasher_num].input(el1_hash);
-
-                            *nempty += digit;
-                            *count += digit + 1;
-                        }
+                        Hash(_, _) => panic!("Hash node no longer supported in this case"),
                         _ => panic!("Unexpected node type"),
                     }
                 } else {
@@ -208,13 +209,13 @@ fn find_common_length(s1: &[u8], s2: &[u8]) -> usize {
     };
     let mut firstdiffindex = shortest.len();
     for (i, &n) in shortest.iter().enumerate() {
-        if n != longuest[i] {
-            firstdiffindex = i as usize;
-            break;
-        }
-    }
-
-    firstdiffindex
+		if n != longuest[i] {
+			firstdiffindex = i as usize;
+			break;
+		}
+	}
+	
+	firstdiffindex
 }
 
 // Insert a `(key,value)` pair into a (sub-)tree represented by `root`.
@@ -328,7 +329,7 @@ fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node, St
 
 // Helper function that generates a multiproof based on one `(key.value)`
 // pair.
-fn make_multiproof(root: &Node, keyvals: Vec<(Vec<u8>, Vec<u8>)>) -> Result<(Vec<Instruction>, Vec<Vec<u8>>, Vec<Vec<u8>>), String> {
+fn make_multiproof(root: &Node, keyvals: Vec<(Vec<u8>, Vec<u8>)>) -> Result<Multiproof, String> {
 	use Node::*;
 
 	let mut instructions = Vec::new();
@@ -338,7 +339,7 @@ fn make_multiproof(root: &Node, keyvals: Vec<(Vec<u8>, Vec<u8>)>) -> Result<(Vec
 	// If there are no keys specified at this node, then just hash that
 	// node.
 	if keyvals.len() == 0 {
-		return Ok((vec![Instruction::HASHER(0)], vec![root.hash(&mut vec![])], vec![]));
+		return Ok(Multiproof{instructions: vec![Instruction::HASHER(0)], hashes: vec![root.hash(&mut vec![])], keyvals: vec![]});
 	}
 
 	// Recurse into each node, follow the trace
@@ -362,6 +363,8 @@ fn make_multiproof(root: &Node, keyvals: Vec<(Vec<u8>, Vec<u8>)>) -> Result<(Vec
 			// by an `ADD` instruction.
 			let mut branch = true;
 			for (selector, subkeys) in split.iter().enumerate() {
+				// Does the child have any key? If not, it will be hashed
+				// and a `HASHER` instruction will be added to the list.
 				if split[selector].len() == 0 {
 					// Empty slots are not to be hashed
 					if vec[selector] != EmptySlot {
@@ -370,16 +373,16 @@ fn make_multiproof(root: &Node, keyvals: Vec<(Vec<u8>, Vec<u8>)>) -> Result<(Vec
 						hashes.push(vec[selector].hash(&mut vec![]));
 					}
 				} else {
-					let (mut i, mut h, mut v) = make_multiproof(&vec[selector], subkeys.to_vec())?;
-					instructions.append(&mut i);
+					let mut proof = make_multiproof(&vec[selector], subkeys.to_vec())?;
+					instructions.append(&mut proof.instructions);
 					if branch {
 						instructions.push(Instruction::BRANCH(selector));
 						branch = false;
 					} else {
 						instructions.push(Instruction::ADD(selector));
 					}
-					hashes.append(&mut h);
-					values.append(&mut v);
+					hashes.append(&mut proof.hashes);
+					values.append(&mut proof.keyvals);
 				}
 			}
 		}
@@ -408,12 +411,15 @@ fn make_multiproof(root: &Node, keyvals: Vec<(Vec<u8>, Vec<u8>)>) -> Result<(Vec
 				}
 				truncated.push((k.to_vec(), v.to_vec()));
 			}
-			let (i, h, v) = make_multiproof(child, truncated)?;
+			let mut proof = make_multiproof(child, truncated)?;
+                        hashes.append(&mut proof.hashes);
+                        instructions.append(&mut proof.instructions);
+                        values.append(&mut proof.keyvals);
 		}
-		Hash(_,_,_) => return Err("Should not have encountered a Hash in this context".to_string()),
+		Hash(_,_) => return Err("Should not have encountered a Hash in this context".to_string()),
 	}
 	
-	Ok((instructions, hashes, values))
+	Ok(Multiproof{instructions: instructions, hashes: hashes, keyvals: values})
 }
 
 #[cfg(test)]
@@ -425,6 +431,35 @@ mod tests {
     use super::Node::*;
     use super::*;
     //use rand::prelude::*;
+    
+    #[test]
+    fn validate_tree() {
+        let mut root = FullNode(vec![EmptySlot; 16]);
+        insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]);
+        insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]);
+        insert_leaf(&mut root, vec![8u8; 32], vec![150u8; 32]);
+        
+        let changes = vec![
+                (vec![2u8; 32], vec![4u8; 32]),
+                (vec![1u8; 32], vec![8u8; 32]),
+            ];
+        
+        let (i, h, mut keyvals) = make_multiproof(
+            &root,
+            changes.clone(),
+        )
+        .unwrap();
+        
+        let mut stack = Vec::new();
+        let proof = Multiproof{
+            hashes: h,
+            keyvals: keyvals,
+            instructions: i,
+        };
+        let new_root = rebuild(&mut stack, &proof);
+
+        assert_eq!(new_root, FullNode(vec![EmptySlot, Leaf(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], vec![8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8]), Leaf(vec![2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2], vec![4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]), EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, Hash(vec![154, 251, 173, 154, 224, 13, 237, 90, 6, 107, 214, 240, 236, 103, 164, 93, 81, 243, 28, 37, 128, 102, 185, 151, 233, 187, 131, 54, 188, 19, 235, 168], 0), EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot, EmptySlot]));
+    }
 
     #[test]
     fn make_multiproof_two_values() {
@@ -433,7 +468,7 @@ mod tests {
         insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]);
         insert_leaf(&mut root, vec![8u8; 32], vec![150u8; 32]);
 
-        let (i, h, v) = make_multiproof(
+        let proof = make_multiproof(
             &root,
             vec![
                 (vec![2u8; 32], vec![4u8; 32]),
@@ -441,6 +476,9 @@ mod tests {
             ],
         )
         .unwrap();
+        let i = proof.instructions;
+        let v = proof.keyvals;
+        let h = proof.hashes;
         assert_eq!(i.len(), 6); // [LEAF, BRANCH, LEAF, ADD, HASHER, ADD]
         match i[0] {
             // Key length is 31
@@ -482,7 +520,10 @@ mod tests {
         insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]);
         insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]);
 
-        let (i, h, v) = make_multiproof(&root, vec![(vec![1u8; 32], vec![1u8; 32])]).unwrap();
+        let proof = make_multiproof(&root, vec![(vec![1u8; 32], vec![1u8; 32])]).unwrap();
+        let i = proof.instructions;
+        let v = proof.keyvals;
+        let h = proof.hashes;
         assert_eq!(i.len(), 4); // [LEAF, BRANCH, HASHER, ADD]
         match i[0] {
             // Key length is 31
@@ -515,7 +556,10 @@ mod tests {
         insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]);
         insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]);
 
-        let (i, h, v) = make_multiproof(&root, vec![]).unwrap();
+        let proof = make_multiproof(&root, vec![]).unwrap();
+        let i = proof.instructions;
+        let v = proof.keyvals;
+        let h = proof.hashes;
         assert_eq!(i.len(), 1);
         assert_eq!(h.len(), 1);
         assert_eq!(v.len(), 0);
@@ -879,12 +923,16 @@ mod tests {
     #[test]
     fn tree_with_just_one_leaf() {
         let mut stack = Vec::new();
-        let mut hashers = Vec::new();
-        let out = step(
+        let proof = Multiproof{
+            hashes: vec![],
+            keyvals: vec![
+                rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![1, 2, 3], vec![4, 5, 6]])
+            ],
+            instructions: vec![LEAF(0)],
+        };
+        let out = rebuild(
             &mut stack,
-            vec![(vec![1, 2, 3], vec![4, 5, 6])],
-            vec![LEAF(0)],
-            &mut hashers,
+            &proof,
         );
         assert_eq!(out, Leaf(vec![], vec![4, 5, 6]))
     }
@@ -892,12 +940,16 @@ mod tests {
     #[test]
     fn tree_with_one_branch() {
         let mut stack = Vec::new();
-        let mut hashers = Vec::new();
-        let out = step(
+        let proof = Multiproof{
+            hashes: vec![],
+            keyvals: vec![
+                rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![1, 2, 3], vec![4, 5, 6]])
+            ],
+            instructions: vec![LEAF(0), BRANCH(0)],
+        };
+        let out = rebuild(
             &mut stack,
-            vec![(vec![1, 2, 3], vec![4, 5, 6])],
-            vec![LEAF(0), BRANCH(0)],
-            &mut hashers,
+            &proof,
         );
         assert_eq!(
             out,
@@ -925,15 +977,17 @@ mod tests {
     #[test]
     fn tree_with_added_branch() {
         let mut stack = Vec::new();
-        let mut hashers = Vec::new();
-        let out = step(
-            &mut stack,
-            vec![
-                (vec![1, 2, 3], vec![4, 5, 6]),
-                (vec![7, 8, 9], vec![10, 11, 12]),
+        let proof = Multiproof{
+            hashes: vec![],
+            keyvals: vec![
+                rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![1, 2, 3], vec![4, 5, 6]]),
+                rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![7, 8, 9], vec![10, 11, 12]]),
             ],
-            vec![LEAF(0), BRANCH(0), LEAF(1), ADD(2)],
-            &mut hashers,
+            instructions: vec![LEAF(0), BRANCH(0), LEAF(1), ADD(2)],
+        };
+        let out = rebuild(
+            &mut stack,
+            &proof,
         );
         assert_eq!(
             out,
@@ -961,22 +1015,23 @@ mod tests {
     #[test]
     fn tree_with_extension() {
         let mut stack = Vec::new();
-        let mut hashers = Vec::new();
-        let out = step(
-            &mut stack,
-            vec![
-                (vec![1, 2, 3], vec![4, 5, 6]),
-                (vec![7, 8, 9], vec![10, 11, 12]),
-            ],
-            vec![
+        let proof = Multiproof{
+            hashes: vec![],
+            instructions: vec![
                 LEAF(0),
                 BRANCH(0),
                 LEAF(1),
                 ADD(2),
                 EXTENSION(vec![13, 14, 15]),
             ],
-            &mut hashers,
-        );
+            keyvals: vec![
+                rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![1, 2, 3], vec![4, 5, 6]]),
+                rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![7, 8, 9], vec![10, 11, 12]]),
+            ],
+        };
+        let out = rebuild(
+            &mut stack,
+            &proof);
         assert_eq!(
             out,
             Extension(
