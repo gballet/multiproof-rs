@@ -5,6 +5,7 @@ extern crate sha3;
 
 use sha3::{Digest, Keccak256};
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 enum Node {
     Hash(Vec<u8>, usize), // (Hash, # empty spaces)
@@ -66,13 +67,14 @@ impl Hashable for Node {
                     encoding
                 }
             }
-            Hash(h, nempty) => {
+            Hash(h, _) => {
                 h.to_vec()
             }
         }
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 enum Instruction {
     BRANCH(usize),
@@ -82,6 +84,7 @@ enum Instruction {
     ADD(usize),
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 struct Multiproof {
     pub hashes: Vec<Vec<u8>>,               // List of hashes in the proof
@@ -89,6 +92,7 @@ struct Multiproof {
     pub keyvals: Vec<Vec<u8>>               // List of RLP-encoded (key, value) pairs in the proof
 }
 
+#[allow(dead_code)]
 // Rebuilds the tree based on the multiproof components
 fn rebuild(
     stack: &mut Vec<Node>,
@@ -98,7 +102,7 @@ fn rebuild(
     use Node::*;
 
     let mut hiter = proof.hashes.iter();
-    let mut iiter = proof.instructions.iter();
+    let iiter = proof.instructions.iter();
     let mut kviter = proof.keyvals.iter().map(|encoded| {
         // Deserialize the keys as they are read
         let keyval = rlp::decode_list::<Vec<u8>>(encoded);
@@ -172,6 +176,7 @@ fn rebuild(
     stack.pop().unwrap()
 }
 
+#[allow(dead_code)]
 fn bytes2nibbles(bytes: &[u8]) -> Vec<u8> {
     let mut nibbles = Vec::<u8>::new();
     for nibble in 0..2 * bytes.len() {
@@ -183,6 +188,7 @@ fn bytes2nibbles(bytes: &[u8]) -> Vec<u8> {
     return nibbles;
 }
 
+#[allow(dead_code)]
 fn nibbles2bytes(nibbles: &[u8]) -> Vec<u8> {
     let mut result = Vec::<u8>::new();
     let mut saved = 0u8;
@@ -200,6 +206,7 @@ fn nibbles2bytes(nibbles: &[u8]) -> Vec<u8> {
     result
 }
 
+#[allow(dead_code)]
 // Utility function to find the length of the common prefix of two keys
 fn find_common_length(s1: &[u8], s2: &[u8]) -> usize {
     let (longuest, shortest) = if s1.len() > s2.len() {
@@ -218,6 +225,7 @@ fn find_common_length(s1: &[u8], s2: &[u8]) -> usize {
 	firstdiffindex
 }
 
+#[allow(dead_code)]
 // Insert a `(key,value)` pair into a (sub-)tree represented by `root`.
 // It returns the root of the updated (sub-)tree.
 fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node, String> {
@@ -327,6 +335,7 @@ fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node, St
     }
 }
 
+#[allow(dead_code)]
 // Helper function that generates a multiproof based on one `(key.value)`
 // pair.
 fn make_multiproof(root: &Node, keyvals: Vec<(Vec<u8>, Vec<u8>)>) -> Result<Multiproof, String> {
@@ -386,7 +395,7 @@ fn make_multiproof(root: &Node, keyvals: Vec<(Vec<u8>, Vec<u8>)>) -> Result<Mult
 				}
 			}
 		}
-		Leaf(leafkey, leafvalue) => {
+		Leaf(leafkey, _) => {
 			if keyvals.len() != 1 {
 				return Err(format!("Expecting exactly 1 key in leaf, got {}: {:?}", keyvals.len(), keyvals).to_string());
 			}
@@ -435,16 +444,16 @@ mod tests {
     #[test]
     fn validate_tree() {
         let mut root = FullNode(vec![EmptySlot; 16]);
-        insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]);
-        insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]);
-        insert_leaf(&mut root, vec![8u8; 32], vec![150u8; 32]);
+        insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]).unwrap();
+        insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]).unwrap();
+        insert_leaf(&mut root, vec![8u8; 32], vec![150u8; 32]).unwrap();
         
         let changes = vec![
                 (vec![2u8; 32], vec![4u8; 32]),
                 (vec![1u8; 32], vec![8u8; 32]),
             ];
         
-        let (i, h, mut keyvals) = make_multiproof(
+        let proof = make_multiproof(
             &root,
             changes.clone(),
         )
@@ -452,9 +461,9 @@ mod tests {
         
         let mut stack = Vec::new();
         let proof = Multiproof{
-            hashes: h,
-            keyvals: keyvals,
-            instructions: i,
+            hashes: proof.hashes,
+            keyvals: proof.keyvals,
+            instructions: proof.instructions,
         };
         let new_root = rebuild(&mut stack, &proof);
 
@@ -464,9 +473,9 @@ mod tests {
     #[test]
     fn make_multiproof_two_values() {
         let mut root = FullNode(vec![EmptySlot; 16]);
-        insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]);
-        insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]);
-        insert_leaf(&mut root, vec![8u8; 32], vec![150u8; 32]);
+        insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]).unwrap();
+        insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]).unwrap();
+        insert_leaf(&mut root, vec![8u8; 32], vec![150u8; 32]).unwrap();
 
         let proof = make_multiproof(
             &root,
@@ -517,8 +526,8 @@ mod tests {
     #[test]
     fn make_multiproof_single_value() {
         let mut root = FullNode(vec![EmptySlot; 16]);
-        insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]);
-        insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]);
+        insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]).unwrap();
+        insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]).unwrap();
 
         let proof = make_multiproof(&root, vec![(vec![1u8; 32], vec![1u8; 32])]).unwrap();
         let i = proof.instructions;
@@ -553,8 +562,8 @@ mod tests {
     #[test]
     fn make_multiproof_no_values() {
         let mut root = FullNode(vec![EmptySlot; 16]);
-        insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]);
-        insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]);
+        insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]).unwrap();
+        insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]).unwrap();
 
         let proof = make_multiproof(&root, vec![]).unwrap();
         let i = proof.instructions;
@@ -567,7 +576,7 @@ mod tests {
 
     #[test]
     fn make_multiproof_empty_tree() {
-        let mut root = FullNode(vec![EmptySlot; 16]);
+        let root = FullNode(vec![EmptySlot; 16]);
 
         let out = make_multiproof(&root, vec![(vec![1u8; 32], vec![1u8; 32])]);
         assert!(out.is_err());
@@ -770,7 +779,7 @@ mod tests {
     #[test]
     fn insert_leaf_into_leaf_root_common_bytes_in_key() {
         let mut key = vec![0u8; 32];
-        for (i, mut v) in key.iter_mut().enumerate() {
+        for (i, v) in key.iter_mut().enumerate() {
             if i >= 16 {
                 break;
             }
