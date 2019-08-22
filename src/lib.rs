@@ -16,11 +16,7 @@ pub enum Node {
     EmptySlot,
 }
 
-pub trait Hashable {
-    fn hash(&self, hashers: &mut Vec<Keccak256>) -> Vec<u8>;
-}
-
-impl Hashable for Node {
+impl Node {
     fn hash(&self, hashers: &mut Vec<Keccak256>) -> Vec<u8> {
         use Node::*;
         match self {
