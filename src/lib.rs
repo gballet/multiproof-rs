@@ -301,7 +301,10 @@ pub fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node
 
 // Helper function that generates a multiproof based on one `(key.value)`
 // pair.
-pub fn make_multiproof(root: &Node, keyvals: Vec<(Vec<u8>, Vec<u8>)>) -> Result<Multiproof, String> {
+pub fn make_multiproof(
+    root: &Node,
+    keyvals: Vec<(Vec<u8>, Vec<u8>)>,
+) -> Result<Multiproof, String> {
     use Node::*;
 
     let mut instructions = Vec::new();

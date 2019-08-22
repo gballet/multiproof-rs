@@ -15,23 +15,22 @@ impl From<ByteKey> for NibbleKey {
     }
 }
 
-
 impl From<NibbleKey> for ByteKey {
     fn from(key: NibbleKey) -> Self {
-            let mut result = Vec::<u8>::new();
-            let mut saved = 0u8;
-	    for (i, nibble) in key.0.iter().enumerate() {
-		if i % 2 == 0 {
-				saved = nibble << 4;
-			} else {
-				result.push(saved | (nibble & 0xF));
-			}
-		}
-		// Add the odd byte
-		if key.0.len() % 2 != 0 {
-			result.push(saved);
+        let mut result = Vec::<u8>::new();
+        let mut saved = 0u8;
+        for (i, nibble) in key.0.iter().enumerate() {
+            if i % 2 == 0 {
+                saved = nibble << 4;
+            } else {
+                result.push(saved | (nibble & 0xF));
             }
-            ByteKey(result)
+        }
+        // Add the odd byte
+        if key.0.len() % 2 != 0 {
+            result.push(saved);
+        }
+        ByteKey(result)
     }
 }
 
