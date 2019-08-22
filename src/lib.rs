@@ -7,9 +7,8 @@ pub mod utils;
 
 use sha3::{Digest, Keccak256};
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
-enum Node {
+pub enum Node {
     Hash(Vec<u8>, usize), // (Hash, # empty spaces)
     Leaf(Vec<u8>, Vec<u8>),
     Extension(Vec<u8>, Box<Node>),
@@ -17,7 +16,7 @@ enum Node {
     EmptySlot,
 }
 
-trait Hashable {
+pub trait Hashable {
     fn hash(&self, hashers: &mut Vec<Keccak256>) -> Vec<u8>;
 }
 
@@ -74,9 +73,8 @@ impl Hashable for Node {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
-enum Instruction {
+pub enum Instruction {
     BRANCH(usize),
     HASHER(usize),
     LEAF(usize),
@@ -84,17 +82,15 @@ enum Instruction {
     ADD(usize),
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
-struct Multiproof {
+pub struct Multiproof {
     pub hashes: Vec<Vec<u8>>,           // List of hashes in the proof
     pub instructions: Vec<Instruction>, // List of instructions in the proof
     pub keyvals: Vec<Vec<u8>>,          // List of RLP-encoded (key, value) pairs in the proof
 }
 
-#[allow(dead_code)]
 // Rebuilds the tree based on the multiproof components
-fn rebuild(stack: &mut Vec<Node>, proof: &Multiproof) -> Node {
+pub fn rebuild(stack: &mut Vec<Node>, proof: &Multiproof) -> Node {
     use Instruction::*;
     use Node::*;
 
@@ -173,7 +169,6 @@ fn rebuild(stack: &mut Vec<Node>, proof: &Multiproof) -> Node {
     stack.pop().unwrap()
 }
 
-#[allow(dead_code)]
 // Utility function to find the length of the common prefix of two keys
 fn find_common_length(s1: &[u8], s2: &[u8]) -> usize {
     let (longuest, shortest) = if s1.len() > s2.len() {
@@ -192,10 +187,9 @@ fn find_common_length(s1: &[u8], s2: &[u8]) -> usize {
     firstdiffindex
 }
 
-#[allow(dead_code)]
 // Insert a `(key,value)` pair into a (sub-)tree represented by `root`.
 // It returns the root of the updated (sub-)tree.
-fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node, String> {
+pub fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node, String> {
     use Node::*;
 
     if key.len() == 0 {
@@ -309,10 +303,9 @@ fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node, St
     }
 }
 
-#[allow(dead_code)]
 // Helper function that generates a multiproof based on one `(key.value)`
 // pair.
-fn make_multiproof(root: &Node, keyvals: Vec<(Vec<u8>, Vec<u8>)>) -> Result<Multiproof, String> {
+pub fn make_multiproof(root: &Node, keyvals: Vec<(Vec<u8>, Vec<u8>)>) -> Result<Multiproof, String> {
     use Node::*;
 
     let mut instructions = Vec::new();
