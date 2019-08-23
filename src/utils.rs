@@ -15,6 +15,12 @@ impl From<ByteKey> for NibbleKey {
     }
 }
 
+impl From<Vec<u8>> for NibbleKey {
+    fn from(nibbles: Vec<u8>) -> Self {
+        NibbleKey(nibbles)
+    }
+}
+
 impl NibbleKey {
     pub fn new(nibbles: Vec<u8>) -> Self {
         for nibble in nibbles.iter() {
@@ -29,7 +35,11 @@ impl NibbleKey {
         NibbleKey(self.0[prefix_length + 1..].to_vec())
     }
 
-    pub fn keep_suffix(&self, suffix_length: usize) -> Self {
+    pub fn prefix(&self, prefix_length: usize) -> Self {
+        NibbleKey(self.0[..prefix_length].to_vec())
+    }
+
+    pub fn suffix(&self, suffix_length: usize) -> Self {
         NibbleKey(self.0[self.0.len() - suffix_length..].to_vec())
     }
 
@@ -40,6 +50,7 @@ impl NibbleKey {
         } else {
             (&other.0, &self.0)
         };
+
         let mut firstdiffindex = shortest.len();
         for (i, &n) in shortest.iter().enumerate() {
             if n != longuest[i] {
@@ -48,7 +59,14 @@ impl NibbleKey {
             }
         }
 
+        assert!(firstdiffindex <= other.0.len());
+        assert!(firstdiffindex <= self.0.len());
+
         firstdiffindex
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 }
 
