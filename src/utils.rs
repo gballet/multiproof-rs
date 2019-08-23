@@ -15,6 +15,63 @@ impl From<ByteKey> for NibbleKey {
     }
 }
 
+impl NibbleKey {
+    pub fn new(nibbles: Vec<u8>) -> Self {
+        for nibble in nibbles.iter() {
+            if *nibble >= 16 {
+                panic!("Nibble value is higher than 15");
+            }
+        }
+        NibbleKey(nibbles.clone())
+    }
+
+    pub fn remove_prefix(&self, prefix_length: usize) -> Self {
+        NibbleKey(self.0[prefix_length + 1..].to_vec())
+    }
+
+    pub fn keep_suffix(&self, suffix_length: usize) -> Self {
+        NibbleKey(self.0[self.0.len() - suffix_length..].to_vec())
+    }
+
+    // Find the length of the common prefix of two keys
+    pub fn factor_length(&self, other: &Self) -> usize {
+        let (ref longuest, ref shortest) = if self.0.len() > other.0.len() {
+            (&self.0, &other.0)
+        } else {
+            (&other.0, &self.0)
+        };
+        let mut firstdiffindex = shortest.len();
+        for (i, &n) in shortest.iter().enumerate() {
+            if n != longuest[i] {
+                firstdiffindex = i as usize;
+                break;
+            }
+        }
+
+        firstdiffindex
+    }
+}
+
+impl rlp::Encodable for NibbleKey {
+    fn rlp_append(&self, s: &mut rlp::RlpStream) {
+        s.append(&self.0);
+    }
+}
+
+impl Into<Vec<u8>> for NibbleKey {
+    fn into(self) -> Vec<u8> {
+        self.0.clone()
+    }
+}
+
+impl std::ops::Index<usize> for NibbleKey {
+    type Output = u8;
+
+    fn index(&self, i: usize) -> &u8 {
+        &self.0[i]
+    }
+}
+
 impl From<NibbleKey> for ByteKey {
     fn from(key: NibbleKey) -> Self {
         let mut result = Vec::<u8>::new();
