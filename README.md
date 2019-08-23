@@ -11,7 +11,7 @@ At the time of creation, multiproof is still a work in progress and this code ma
 **This code uses features from rust nightly.** Install it by typing:
 
 ```
-cargo install
+rustup install nightly
 ```
 
 You can then run the tests with:
