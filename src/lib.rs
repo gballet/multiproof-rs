@@ -128,14 +128,17 @@ pub fn rebuild(stack: &mut Vec<Node>, proof: &Multiproof) -> Result<Node, String
                 if let Some(h) = hiter.next() {
                     stack.push(Hash(h.to_vec(), *digit));
                 } else {
-                    return Err(format!("Proof requires one more hash in HASHER"));
+                    return Err(format!("Proof requires one more hash in HASHER({})", digit));
                 }
             }
             LEAF(keylength) => {
                 if let Some(Leaf(key, value)) = kviter.next() {
                     stack.push(Leaf(key.keep_suffix(*keylength), value.to_vec()));
                 } else {
-                    return Err(format!("Proof requires one more (key,value) pair in LEAF"));
+                    return Err(format!(
+                        "Proof requires one more (key,value) pair in LEAF({})",
+                        keylength
+                    ));
                 }
             }
             BRANCH(digit) => {
@@ -145,7 +148,8 @@ pub fn rebuild(stack: &mut Vec<Node>, proof: &Multiproof) -> Result<Node, String
                     stack.push(FullNode(children))
                 } else {
                     return Err(format!(
-                        "Could not pop a value from the stack, that is required for a BRANCH"
+                        "Could not pop a value from the stack, that is required for a BRANCH({})",
+                        digit
                     ));
                 }
             }
@@ -154,7 +158,8 @@ pub fn rebuild(stack: &mut Vec<Node>, proof: &Multiproof) -> Result<Node, String
                     stack.push(Extension(key.to_vec(), Box::new(node)));
                 } else {
                     return Err(format!(
-                        "Could not find a node on the stack, that is required for an EXTENSION"
+                        "Could not find a node on the stack, that is required for an EXTENSION({:?})",
+                        key
                     ));
                 }
             }
@@ -175,18 +180,20 @@ pub fn rebuild(stack: &mut Vec<Node>, proof: &Multiproof) -> Result<Node, String
                             n2[*digit] = el1;
                         }
                         Hash(_, _) => {
-                            return Err(format!("Hash node no longer supported in this case"))
+                            return Err(String::from("Hash node no longer supported in this case"))
                         }
-                        _ => return Err(format!("Unexpected node type")),
+                        _ => return Err(String::from("Unexpected node type")),
                     }
                 } else {
-                    return Err(format!("Could not find enough parameters to ADD"));
+                    return Err(String::from("Could not find enough parameters to ADD"));
                 }
             }
         }
     }
 
-    Ok(stack.pop().unwrap())
+    stack
+        .pop()
+        .ok_or(String::from("Stack underflow, expected root node"))
 }
 
 // Utility function to find the length of the common prefix of two keys
