@@ -111,7 +111,7 @@ pub struct Multiproof {
 }
 
 // Rebuilds the tree based on the multiproof components
-pub fn rebuild(stack: &mut Vec<Node>, proof: &Multiproof) -> Node {
+pub fn rebuild(stack: &mut Vec<Node>, proof: &Multiproof) -> Result<Node, String> {
     use Instruction::*;
     use Node::*;
 
@@ -128,14 +128,17 @@ pub fn rebuild(stack: &mut Vec<Node>, proof: &Multiproof) -> Node {
                 if let Some(h) = hiter.next() {
                     stack.push(Hash(h.to_vec(), *digit));
                 } else {
-                    panic!("Proof requires one more hash in HASHER")
+                    return Err(format!("Proof requires one more hash in HASHER({})", digit));
                 }
             }
             LEAF(keylength) => {
                 if let Some(Leaf(key, value)) = kviter.next() {
                     stack.push(Leaf(key.keep_suffix(*keylength), value.to_vec()));
                 } else {
-                    panic!("Proof requires one more (key,value) pair in LEAF");
+                    return Err(format!(
+                        "Proof requires one more (key,value) pair in LEAF({})",
+                        keylength
+                    ));
                 }
             }
             BRANCH(digit) => {
@@ -144,14 +147,20 @@ pub fn rebuild(stack: &mut Vec<Node>, proof: &Multiproof) -> Node {
                     children[*digit] = node;
                     stack.push(FullNode(children))
                 } else {
-                    panic!("Could not pop a value from the stack, that is required for a BRANCH")
+                    return Err(format!(
+                        "Could not pop a value from the stack, that is required for a BRANCH({})",
+                        digit
+                    ));
                 }
             }
             EXTENSION(key) => {
                 if let Some(node) = stack.pop() {
                     stack.push(Extension(key.to_vec(), Box::new(node)));
                 } else {
-                    panic!("Could not find a node on the stack, that is required for an EXTENSION")
+                    return Err(format!(
+                        "Could not find a node on the stack, that is required for an EXTENSION({:?})",
+                        key
+                    ));
                 }
             }
             ADD(digit) => {
@@ -159,28 +168,32 @@ pub fn rebuild(stack: &mut Vec<Node>, proof: &Multiproof) -> Node {
                     match el2 {
                         FullNode(ref mut n2) => {
                             if *digit >= n2.len() {
-                                panic!(format!(
+                                return Err(format!(
                                     "Incorrect full node index: {} > {}",
                                     digit,
                                     n2.len() - 1
-                                ))
+                                ));
                             }
 
                             // A hash needs to be fed into the hash sponge, any other node is simply
                             // a child (el1) of the parent node (el2). this is done during resolve.
                             n2[*digit] = el1;
                         }
-                        Hash(_, _) => panic!("Hash node no longer supported in this case"),
-                        _ => panic!("Unexpected node type"),
+                        Hash(_, _) => {
+                            return Err(String::from("Hash node no longer supported in this case"))
+                        }
+                        _ => return Err(String::from("Unexpected node type")),
                     }
                 } else {
-                    panic!("Could not find enough parameters to ADD")
+                    return Err(String::from("Could not find enough parameters to ADD"));
                 }
             }
         }
     }
 
-    stack.pop().unwrap()
+    stack
+        .pop()
+        .ok_or(String::from("Stack underflow, expected root node"))
 }
 
 // Utility function to find the length of the common prefix of two keys
@@ -463,7 +476,7 @@ mod tests {
             keyvals: proof.keyvals,
             instructions: proof.instructions,
         };
-        let new_root = rebuild(&mut stack, &proof);
+        let new_root = rebuild(&mut stack, &proof).unwrap();
 
         assert_eq!(
             new_root,
@@ -985,7 +998,7 @@ mod tests {
             ])],
             instructions: vec![LEAF(0)],
         };
-        let out = rebuild(&mut stack, &proof);
+        let out = rebuild(&mut stack, &proof).unwrap();
         assert_eq!(out, Leaf(NibbleKey::new(vec![]), vec![4, 5, 6]))
     }
 
@@ -1000,7 +1013,7 @@ mod tests {
             ])],
             instructions: vec![LEAF(0), BRANCH(0)],
         };
-        let out = rebuild(&mut stack, &proof);
+        let out = rebuild(&mut stack, &proof).unwrap();
         assert_eq!(
             out,
             FullNode(vec![
@@ -1035,7 +1048,7 @@ mod tests {
             ],
             instructions: vec![LEAF(0), BRANCH(0), LEAF(1), ADD(2)],
         };
-        let out = rebuild(&mut stack, &proof);
+        let out = rebuild(&mut stack, &proof).unwrap();
         assert_eq!(
             out,
             FullNode(vec![
@@ -1076,7 +1089,7 @@ mod tests {
                 rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![7, 8, 9], vec![10, 11, 12]]),
             ],
         };
-        let out = rebuild(&mut stack, &proof);
+        let out = rebuild(&mut stack, &proof).unwrap();
         assert_eq!(
             out,
             Extension(
