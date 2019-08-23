@@ -43,7 +43,7 @@ impl rlp::Decodable for Node {
 }
 
 impl Node {
-    fn hash(&self, hashers: &mut Vec<Keccak256>) -> Vec<u8> {
+    fn hash(&self) -> Vec<u8> {
         use Node::*;
         match self {
             EmptySlot => Vec::new(),
@@ -60,7 +60,7 @@ impl Node {
                 }
             }
             Extension(ref ext, node) => {
-                let subtree_hash = node.hash(hashers);
+                let subtree_hash = node.hash();
                 let encoding =
                     rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![ext.clone(), subtree_hash.clone()]);
 
@@ -76,7 +76,7 @@ impl Node {
             FullNode(ref nodes) => {
                 let mut keys = Vec::new();
                 for node in nodes {
-                    keys.push(node.hash(hashers));
+                    keys.push(node.hash());
                 }
                 let encoding = rlp::encode_list::<Vec<u8>, Vec<u8>>(&keys[..]);
 
@@ -336,7 +336,7 @@ pub fn make_multiproof(
     if keyvals.len() == 0 {
         return Ok(Multiproof {
             instructions: vec![Instruction::HASHER(0)],
-            hashes: vec![root.hash(&mut vec![])],
+            hashes: vec![root.hash()],
             keyvals: vec![],
         });
     }
@@ -369,7 +369,7 @@ pub fn make_multiproof(
                     if vec[selector] != EmptySlot {
                         instructions.push(Instruction::HASHER(0));
                         instructions.push(Instruction::ADD(selector));
-                        hashes.push(vec[selector].hash(&mut vec![]));
+                        hashes.push(vec[selector].hash());
                     }
                 } else {
                     let mut proof = make_multiproof(&vec[selector], subkeys.to_vec())?;
@@ -1105,18 +1105,16 @@ mod tests {
 
     #[test]
     fn single_value_hash() {
-        let mut hashers = Vec::new();
         assert_eq!(
-            Leaf(NibbleKey::new(vec![1, 2, 3]), vec![4, 5, 6]).hash(&mut hashers),
-            rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![1, 2, 3], vec![4, 5, 6]])
+            Leaf(NibbleKey::new(vec![1, 2, 3]), vec![4, 5, 6]).hash(),
+            vec![200, 131, 1, 2, 3, 131, 4, 5, 6]
         );
     }
 
     #[test]
     fn big_value_single_key_hash() {
-        let mut hashers = Vec::new();
         assert_eq!(
-            Leaf(NibbleKey::new(vec![0u8; 32]), vec![4, 5, 6]).hash(&mut hashers),
+            Leaf(NibbleKey::new(vec![0u8; 32]), vec![4, 5, 6]).hash(),
             vec![
                 0, 77, 126, 218, 113, 171, 7, 238, 113, 12, 152, 238, 20, 175, 97, 155, 196, 30,
                 204, 126, 160, 234, 193, 58, 113, 98, 12, 214, 67, 79, 220, 254
@@ -1126,9 +1124,8 @@ mod tests {
 
     #[test]
     fn big_value_single_big_key_hash() {
-        let mut hashers = Vec::new();
         assert_eq!(
-            Leaf(NibbleKey::new(vec![0u8; 32]), vec![1u8; 32]).hash(&mut hashers),
+            Leaf(NibbleKey::new(vec![0u8; 32]), vec![1u8; 32]).hash(),
             vec![
                 39, 97, 78, 243, 73, 225, 199, 242, 196, 228, 21, 194, 103, 85, 166, 247, 138, 229,
                 54, 32, 16, 17, 243, 46, 71, 115, 81, 139, 131, 214, 203, 184
@@ -1138,14 +1135,12 @@ mod tests {
 
     #[test]
     fn empty_value_hash() {
-        let mut hashers = Vec::new();
         let node = EmptySlot;
-        assert_eq!(node.hash(&mut hashers), vec![]);
+        assert_eq!(node.hash(), vec![]);
     }
 
     #[test]
     fn full_node_hash() {
-        let mut hashers = Vec::new();
         assert_eq!(
             FullNode(vec![
                 Leaf(NibbleKey::new(vec![]), vec![4, 5, 6]),
@@ -1165,7 +1160,7 @@ mod tests {
                 EmptySlot,
                 EmptySlot
             ])
-            .hash(&mut hashers),
+            .hash(),
             vec![
                 220, 134, 197, 128, 131, 4, 5, 6, 128, 134, 197, 9, 131, 10, 11, 12, 128, 128, 128,
                 128, 128, 128, 128, 128, 128, 128, 128, 128, 128

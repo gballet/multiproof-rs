@@ -43,7 +43,7 @@ let new_root = insert_leaf(&mut tree_root, vec![1u8; 32], vec![2u8; 32]).unwrap(
 The `hash` function will walk the tree and calculate the hash representation.
 
 ```rust
-let hash = new_root.hash(&mut vec![]);
+let hash = new_root.hash();
 ```
 
 ### Creating the proof
