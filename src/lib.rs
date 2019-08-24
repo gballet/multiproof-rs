@@ -381,7 +381,12 @@ pub fn make_multiproof(
                     // Empty slots are not to be hashed
                     if vec[selector] != EmptySlot {
                         instructions.push(Instruction::HASHER(0));
-                        instructions.push(Instruction::ADD(selector));
+                        if branch {
+                            instructions.push(Instruction::BRANCH(selector));
+                            branch = false;
+                        } else {
+                            instructions.push(Instruction::ADD(selector));
+                        }
                         hashes.push(vec[selector].hash());
                     }
                 } else {
@@ -635,6 +640,22 @@ mod tests {
 
         let out = make_multiproof(&root, vec![(vec![1u8; 32], vec![1u8; 32])]);
         assert!(out.is_err());
+    }
+
+    #[test]
+    fn make_multiproof_hash_before_nested_nodes_in_branch() {
+        let mut root = FullNode(vec![EmptySlot; 16]);
+        insert_leaf(&mut root, vec![1u8; 32], vec![0u8; 32]).unwrap();
+        insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]).unwrap();
+
+        let pre_root_hash = root.hash();
+
+        let proof = make_multiproof(&root, vec![(vec![2u8; 32], vec![0u8; 32])]).unwrap();
+
+        let mut stack = Vec::new();
+        let res = rebuild(&mut stack, &proof);
+
+        assert_eq!(res.hash(), pre_root_hash);
     }
 
     #[test]
