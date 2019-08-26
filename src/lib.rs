@@ -94,7 +94,7 @@ impl Node {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Instruction {
     BRANCH(usize),
     HASHER(usize),
@@ -103,11 +103,72 @@ pub enum Instruction {
     ADD(usize),
 }
 
-#[derive(Debug)]
+impl rlp::Encodable for Instruction {
+    fn rlp_append(&self, s: &mut rlp::RlpStream) {
+        match self {
+            Instruction::EXTENSION(ref ext) => s.begin_list(2).append(&3usize).append_list(ext),
+            Instruction::BRANCH(size) => s.begin_list(2).append(&0usize).append(size),
+            Instruction::HASHER(size) => s.begin_list(2).append(&1usize).append(size),
+            Instruction::LEAF(size) => s.begin_list(2).append(&2usize).append(size),
+            Instruction::ADD(index) => s.begin_list(2).append(&4usize).append(index),
+        };
+    }
+}
+
+impl rlp::Decodable for Instruction {
+    fn decode(rlp: &rlp::Rlp) -> Result<Self, rlp::DecoderError> {
+        let instrrlp = rlp.at(0usize)?;
+        let instr: usize = instrrlp.as_val()?;
+
+        if instr >= 5 {
+            return Err(rlp::DecoderError::Custom("Invalid instruction opcode {}"));
+        }
+
+        if instr != 3 {
+            let size: usize = rlp.at(1usize)?.as_val()?;
+            let i = match instr {
+                0 => Instruction::BRANCH(size),
+                1 => Instruction::HASHER(size),
+                2 => Instruction::LEAF(size),
+                4 => Instruction::ADD(size),
+                _ => panic!("This should never happen!"), /* Famous last words */
+            };
+
+            return Ok(i);
+        }
+
+        let ext = rlp.at(1usize)?.as_list()?;
+        Ok(Instruction::EXTENSION(ext))
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub struct Multiproof {
     pub hashes: Vec<Vec<u8>>,           // List of hashes in the proof
     pub instructions: Vec<Instruction>, // List of instructions in the proof
     pub keyvals: Vec<Vec<u8>>,          // List of RLP-encoded (key, value) pairs in the proof
+}
+
+impl rlp::Encodable for Multiproof {
+    fn rlp_append(&self, s: &mut rlp::RlpStream) {
+        s.begin_list(2);
+        s.append_list::<Vec<u8>, Vec<u8>>(&self.hashes[..]);
+        s.append_list::<Vec<u8>, Vec<u8>>(&self.keyvals[..]);
+        s.append_list::<Instruction, Instruction>(&self.instructions[..]);
+    }
+}
+
+impl rlp::Decodable for Multiproof {
+    fn decode(rlp: &rlp::Rlp) -> Result<Self, rlp::DecoderError> {
+        let hashes: Vec<Vec<u8>> = rlp.list_at(0usize)?;
+        let keyvals: Vec<Vec<u8>> = rlp.list_at(1usize)?;
+        let instructions: Vec<Instruction> = rlp.list_at(2usize)?;
+        Ok(Multiproof {
+            hashes: hashes,
+            instructions: instructions,
+            keyvals: keyvals,
+        })
+    }
 }
 
 // Rebuilds the tree based on the multiproof components
@@ -1200,5 +1261,33 @@ mod tests {
                 128, 128, 128, 128, 128, 128, 128, 128, 128, 128
             ]
         );
+    }
+
+    #[test]
+    fn encode_decode_instruction() {
+        let instructions = vec![LEAF(1), ADD(5), EXTENSION(vec![3u8; 4]), BRANCH(6)];
+
+        let encoded = rlp::encode_list(&instructions);
+        let decoded = rlp::decode_list::<Instruction>(&encoded);
+        assert_eq!(decoded, instructions);
+    }
+
+    #[test]
+    fn encode_decode_multiproof() {
+        let mp = Multiproof {
+            hashes: vec![vec![1u8; 32]],
+            instructions: vec![LEAF(0)],
+            keyvals: vec![rlp::encode(&Leaf(NibbleKey::new(vec![1]), vec![2]))],
+        };
+        let rlp = rlp::encode(&mp);
+        let decoded = rlp::decode::<Multiproof>(&rlp).unwrap();
+        assert_eq!(
+            decoded,
+            Multiproof {
+                hashes: vec![vec![1u8; 32]],
+                keyvals: vec![rlp::encode(&Leaf(NibbleKey::new(vec![1]), vec![2]))],
+                instructions: vec![LEAF(0)]
+            }
+        )
     }
 }
