@@ -655,7 +655,7 @@ mod tests {
         let mut stack = Vec::new();
         let res = rebuild(&mut stack, &proof);
 
-        assert_eq!(res.hash(), pre_root_hash);
+        assert_eq!(res.unwrap().hash(), pre_root_hash);
     }
 
     #[test]
