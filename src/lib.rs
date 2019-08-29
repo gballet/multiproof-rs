@@ -187,24 +187,6 @@ pub fn rebuild(stack: &mut Vec<Node>, proof: &Multiproof) -> Node {
     stack.pop().unwrap()
 }
 
-// Utility function to find the length of the common prefix of two keys
-fn find_common_length(s1: &[u8], s2: &[u8]) -> usize {
-    let (longuest, shortest) = if s1.len() > s2.len() {
-        (s1, s2)
-    } else {
-        (s2, s1)
-    };
-    let mut firstdiffindex = shortest.len();
-    for (i, &n) in shortest.iter().enumerate() {
-        if n != longuest[i] {
-            firstdiffindex = i as usize;
-            break;
-        }
-    }
-
-    firstdiffindex
-}
-
 // Insert a `(key,value)` pair into a (sub-)tree represented by `root`.
 // It returns the root of the updated (sub-)tree.
 pub fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node, String> {
