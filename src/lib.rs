@@ -151,7 +151,7 @@ pub struct Multiproof {
 
 impl rlp::Encodable for Multiproof {
     fn rlp_append(&self, s: &mut rlp::RlpStream) {
-        s.begin_list(2);
+        s.begin_list(3);
         s.append_list::<Vec<u8>, Vec<u8>>(&self.hashes[..]);
         s.append_list::<Vec<u8>, Vec<u8>>(&self.keyvals[..]);
         s.append_list::<Instruction, Instruction>(&self.instructions[..]);
