@@ -31,18 +31,6 @@ impl NibbleKey {
         NibbleKey(nibbles.clone())
     }
 
-    pub fn remove_prefix(&self, prefix_length: usize) -> Self {
-        NibbleKey(self.0[prefix_length + 1..].to_vec())
-    }
-
-    pub fn prefix(&self, prefix_length: usize) -> Self {
-        NibbleKey(self.0[..prefix_length].to_vec())
-    }
-
-    pub fn suffix(&self, suffix_length: usize) -> Self {
-        NibbleKey(self.0[self.0.len() - suffix_length..].to_vec())
-    }
-
     // Find the length of the common prefix of two keys
     pub fn factor_length(&self, other: &Self) -> usize {
         let (ref longuest, ref shortest) = if self.0.len() > other.0.len() {
@@ -85,8 +73,27 @@ impl Into<Vec<u8>> for NibbleKey {
 impl std::ops::Index<usize> for NibbleKey {
     type Output = u8;
 
+    #[inline]
     fn index(&self, i: usize) -> &u8 {
         &self.0[i]
+    }
+}
+
+impl std::ops::Index<std::ops::RangeFrom<usize>> for NibbleKey {
+    type Output = [u8];
+
+    #[inline]
+    fn index(&self, r: std::ops::RangeFrom<usize>) -> &[u8] {
+        &self.0[r]
+    }
+}
+
+impl std::ops::Index<std::ops::RangeTo<usize>> for NibbleKey {
+    type Output = [u8];
+
+    #[inline]
+    fn index(&self, r: std::ops::RangeTo<usize>) -> &[u8] {
+        &self.0[r]
     }
 }
 
@@ -127,5 +134,29 @@ mod tests {
         let nibbles = NibbleKey(vec![0xd, 0xe, 0xa, 0xd, 0xb, 0xe, 0xe, 0xf]);
         let bytes = ByteKey(vec![0xde, 0xad, 0xbe, 0xef]);
         assert_eq!(nibbles, NibbleKey::from(bytes));
+    }
+
+    #[test]
+    fn test_suffix() {
+        let nibbles = NibbleKey(vec![0xd, 0xe, 0xa, 0xd, 0xb, 0xe, 0xe, 0xf]);
+        assert_eq!(nibbles[nibbles.len() - 2..], vec![0xeu8, 0xf][..]);
+    }
+
+    #[test]
+    fn test_empty_suffix() {
+        let nibbles = NibbleKey(vec![0xd, 0xe, 0xa, 0xd, 0xb, 0xe, 0xe, 0xf]);
+        assert_eq!(nibbles[nibbles.len()..], vec![][..]);
+    }
+
+    #[test]
+    fn test_prefix() {
+        let nibbles = NibbleKey(vec![0xd, 0xe, 0xa, 0xd, 0xb, 0xe, 0xe, 0xf]);
+        assert_eq!(nibbles[..3], vec![0xdu8, 0xe, 0xa][..]);
+    }
+
+    #[test]
+    fn test_empty_prefix() {
+        let nibbles = NibbleKey(vec![0xd, 0xe, 0xa, 0xd, 0xb, 0xe, 0xe, 0xf]);
+        assert_eq!(nibbles[..0], vec![][..]);
     }
 }

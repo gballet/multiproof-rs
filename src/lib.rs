@@ -137,7 +137,10 @@ pub fn rebuild(stack: &mut Vec<Node>, proof: &Multiproof) -> Node {
             }
             LEAF(keylength) => {
                 if let Some(Leaf(key, value)) = kviter.next() {
-                    stack.push(Leaf(key.suffix(*keylength), value.to_vec()));
+                    stack.push(Leaf(
+                        NibbleKey::new(key[key.len() - *keylength..].to_vec()),
+                        value.to_vec(),
+                    ));
                 } else {
                     panic!("Proof requires one more (key,value) pair in LEAF");
                 }
@@ -211,8 +214,10 @@ pub fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node
             let mut res = vec![EmptySlot; 16];
             // Add the initial leaf, with a key truncated by the common
             // key part.
-            res[leafkey[firstdiffindex] as usize] =
-                Leaf(leafkey.remove_prefix(firstdiffindex), leafvalue.to_vec());
+            res[leafkey[firstdiffindex] as usize] = Leaf(
+                NibbleKey::new(leafkey[firstdiffindex + 1..].to_vec()),
+                leafvalue.to_vec(),
+            );
             // Add the node to be inserted
             res[key[firstdiffindex] as usize] =
                 Leaf(NibbleKey::new(key[firstdiffindex + 1..].to_vec()), value);
@@ -222,7 +227,7 @@ pub fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node
                 Ok(FullNode(res))
             } else {
                 Ok(Extension(
-                    NibbleKey::new(key).prefix(firstdiffindex),
+                    NibbleKey::new(key[..firstdiffindex].to_vec()),
                     Box::new(FullNode(res)),
                 ))
             }
@@ -250,7 +255,10 @@ pub fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node
                 res[extkey[0] as usize] = if extkey.len() == 1 {
                     child.clone()
                 } else {
-                    Extension(extkey.remove_prefix(0), Box::new(child.clone()))
+                    Extension(
+                        NibbleKey::new(extkey[1..].to_vec()),
+                        Box::new(child.clone()),
+                    )
                 };
 
                 // Create the entry for the node. If there was only a
@@ -270,7 +278,7 @@ pub fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node
             // of an extension node past the full node.
             res[extkey[firstdiffindex] as usize] = if extkey.len() - firstdiffindex > 1 {
                 Extension(
-                    extkey.remove_prefix(firstdiffindex),
+                    NibbleKey::new(extkey[firstdiffindex + 1..].to_vec()),
                     Box::new(child.clone()),
                 )
             } else {
@@ -281,7 +289,7 @@ pub fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node
                 Leaf(NibbleKey::new(key[firstdiffindex + 1..].to_vec()), value);
             // Put the common part into an extension node
             Ok(Extension(
-                extkey.prefix(firstdiffindex),
+                NibbleKey::new(extkey[..firstdiffindex].to_vec()),
                 Box::new(FullNode(res)),
             ))
         }
