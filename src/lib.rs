@@ -21,13 +21,31 @@ impl rlp::Encodable for Node {
     fn rlp_append(&self, s: &mut rlp::RlpStream) {
         match self {
             Node::Leaf(ref k, ref v) => {
-                let l: Vec<u8> = k.clone().into();
+                let key_prefixed = add_indicator_prefix(k.clone().into(), true);
+                let key_nibbles = NibbleKey::from(key_prefixed.clone());
+                let l = ByteKey::from(key_nibbles).0;
                 s.append_list::<Vec<u8>, Vec<u8>>(&vec![l, v.to_vec()]);
             }
             Node::Extension(ref ext, box node) => {
-                let l: Vec<u8> = ext.clone().into();
-                let e: Vec<u8> = rlp::encode(node);
-                s.append_list::<Vec<u8>, Vec<u8>>(&vec![l, e]);
+                let key_prefixed = add_indicator_prefix(ext.clone().into(), false);
+                let ext_key_nibbles = NibbleKey::from(key_prefixed.clone());
+                let ext_key_bytes = ByteKey::from(ext_key_nibbles).0;
+
+                let extension_branch_hash = node.hash();
+
+                s.append_list::<Vec<u8>, Vec<u8>>(&vec![ext_key_bytes, extension_branch_hash]);
+            }
+            Node::FullNode(ref vec) => {
+                let mut child_refs = Vec::new();
+                for node in vec {
+                    child_refs.push(node.hash());
+                }
+                if child_refs.len() == 16 {
+                    // add 17th element to branch node
+                    child_refs.push(Vec::new());
+                }
+                let encoding = rlp::encode_list::<Vec<u8>, Vec<u8>>(&child_refs[..]);
+                s.append(&encoding);
             }
             _ => panic!("Not supported yet!"),
         }
@@ -40,8 +58,11 @@ impl rlp::Decodable for Node {
             return Err(rlp::DecoderError::RlpExpectedToBeList);
         }
         let keyval = rlp.as_list::<Vec<u8>>()?;
+        let key_bytes = utils::ByteKey(keyval[0].clone());
+        let key_nibbles = NibbleKey::from(key_bytes);
+        // TODO: remove indicator prefix if node is a leaf or extension
         Ok(Node::Leaf(
-            NibbleKey::new(keyval[0].clone()),
+            key_nibbles,
             keyval[1].clone(),
         ))
     }
@@ -55,7 +76,7 @@ impl Node {
             Leaf(_, _) => {
                 let encoding = rlp::encode(self);
 
-                // Only hash if the encoder output is less than 32 bytes.
+                // Only hash if the encoder output is more than 32 bytes.
                 if encoding.len() > 32 {
                     let mut hasher = Keccak256::new();
                     hasher.input(&encoding);
@@ -68,7 +89,7 @@ impl Node {
                 let subtree_hash = node.hash();
                 let encoding = rlp::encode(self);
 
-                // Only hash if the encoder output is less than 32 bytes.
+                // Only hash if the encoder output is more than 32 bytes.
                 if encoding.len() > 32 {
                     let mut hasher = Keccak256::new();
                     hasher.input(&encoding);
@@ -82,9 +103,13 @@ impl Node {
                 for node in nodes {
                     keys.push(node.hash());
                 }
+                if keys.len() == 16 {
+                    // add 17th element to branch node
+                    keys.push(Vec::new());
+                }
                 let encoding = rlp::encode_list::<Vec<u8>, Vec<u8>>(&keys[..]);
 
-                // Only hash if the encoder output is less than 32 bytes.
+                // Only hash if the encoder output is more than 32 bytes.
                 if encoding.len() > 32 {
                     let mut hasher = Keccak256::new();
                     hasher.input(&encoding);
@@ -375,7 +400,7 @@ pub fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node
                 // XXX check that the value is at least 1
                 Leaf(NibbleKey::new(key[1..].to_vec()), value)
             } else {
-                insert_leaf(&mut vec[idx], key[idx + 1..].to_vec(), value)?
+                insert_leaf(&mut vec[idx], key[1..].to_vec(), value)?
             };
             // Return the root node with an updated entry
             Ok(FullNode(vec.to_vec()))
@@ -708,6 +733,36 @@ mod tests {
         let res = rebuild(&mut stack, &proof);
 
         assert_eq!(res.unwrap().hash(), pre_root_hash);
+    }
+
+    #[test]
+    fn make_tree_from_json() {
+        let data = r#"
+{"0xe4397428176a9d67f315f2e6629fd765d42ae7e1":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x991d76d11c89f559eea25023d0dc46e3dd6fb950":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0xcb4a4c7f9e05986b14637f39d450f0b7dd1b1d18":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0xe45f028817e60dacaddf883e58fe95473064b442":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x04a7e6a2ab8e6052c1c43b479cfe259909c9e010":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x0964b7eb170f9b4ca78993dfc15651b0774dd736":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0xc2a0bc0b3b823ef42949608e27c4f466d4396094":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x9bf5beb53363eaa698f2b7dc168d5f66226545c1":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x9599f2d7a33640cbf37f503628f4192abbea458f":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x0eea17ceda73fc60254ba5488191637438921691":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0xd30dbf65784cf922cdce4cd120df8273e2ee549b":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x5231b00f2bbfac6b97684d831ed7f0e9501651fc":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x5bb511728564c51cd8d3416793e38568eda9d0a3":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0xd70f4f01fd59bfe26490ecb2fc7c55c9649a57ce":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0xd57a9b0d050c78adeb3e20f012f9a8319716ebb6":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0xb66a9ac027d23f8f94f2c376a4052664ade498a9":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x34987dfcbae548e738088e1d11d2f72729eef184":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0xe5d4dbc331522791b5b5219e8cd8d7c91a83799c":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x8bdc6990cdbd1224e3aecfe6e9e12f06e7c3b3cd":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x607d3fb274316356228b65e3ae17ca2b6022ade3":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0xaeb4fe559c719ae4bf87d17b9de75d62546710bb":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0xdea2814e18e0bc50f83fa6974ee666d5c2e31509":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0xded0801b766b93a0b8f06ad28de5a1c6cd42915b":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x0302556bfc154e2d0c21c6491e60186cb9ece05c":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x04b35e8791a6558533e6bada21acfae056f0efc3":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x620dce1eae1821ef02cbf50ab341ef587fe27aa6":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x0b96a324f22c4a6030abebb33e951d85401d7eba":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0xcd7f913d47fcab84440a2eb609071fe540df697a":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x29976a22bc3b4ea0ec93fc24fca6de6f4692fe06":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x939a1d05aaca711e59790b254c6309f7a2216c0c":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x452dd6bf56d3448d98149bc81380f7ea728cc43e":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x4f74de0942cdce1384e26bf0cf01d0fb229101e0":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x1feb351fb95e9fd645659879b8b43cb912098989":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x1c4f82ff74ea139cb30f680aeaf35537c1eabe1e":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0xc95eed1a125c9721302434ffa7b600eb7a4d0cb1":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0xf7b26440e89dce0e4dd46b671a717383af2db7a1":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0xb4d2e982bfe983900b3daf60b12ad33ec21504dc":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0xdb332086d4a6d8586b623e2becadadd6e1706190":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x170709b70bf8f3317cc5b097950a0692f0f2d217":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x24539768135d23da172a1de3c4a009e00706ba57":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0xf8efbb9182faa0dba690817287a4c04049dba53e":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x7eafff58a00208547c4b029eab01046178cf9d85":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0xcb26f66ec5236502fb827cc7ec3401ca9b5ab7d2":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0xc4c29ba61264419fa9c199b777ea5757252befcb":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x63b778ed70c7163133ccea1866b6eb7243ca0277":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0x8070abd918d5bb1f49a06cb90d8cb342b7bc3175":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0xf6d3eda42fcb3390b1ef59e53cb0c3ef72c6093c":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0xd6833a4ebd462c80bb972d6f9cf4d34cc520d2d0":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}},"0xd120e146e814feb22413fa0b0e93e9000ae6e3de":{"balance":"0xffffff","code":"","nonce":"0x00","storage":{}}}
+"#;
+
+        let v: serde_json::Value = serde_json::from_str(data).unwrap();
+        let v_obj = v.as_object().unwrap();
+
+        let mut root = FullNode(vec![EmptySlot; 16]);
+
+        // the accounts are all the same, this is the serialized value
+        let account_leaf_val = hex::decode("f8478083ffffffa056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a0c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap();
+
+        v_obj.keys().for_each(|key| {
+            let address_bytes = hex::decode(&key[2..]).unwrap();
+            // get hash of address
+            let mut hasher = Keccak256::new();
+            hasher.input(&address_bytes);
+            let address_hash = Vec::<u8>::from(&hasher.result()[..]);
+            let byte_key = utils::ByteKey(address_hash.to_vec());
+            let address_hash_nibbles = NibbleKey::from(byte_key);
+
+            insert_leaf(&mut root, address_hash_nibbles.into(), account_leaf_val.clone()).unwrap();
+        });
+
+        let pre_root_hash = root.hash();
+        assert_eq!(hex::encode(pre_root_hash), "b3c418cb00ad7c907176be86a5a21759b74bd3828ed62a1ea2ae8daea98c5da2");
     }
 
     #[test]
@@ -1222,7 +1277,7 @@ mod tests {
     #[test]
     fn empty_value_hash() {
         let node = EmptySlot;
-        assert_eq!(node.hash(), vec![]);
+        assert_eq!(node.hash(), vec![0u8; 0]);
     }
 
     #[test]
