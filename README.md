@@ -17,7 +17,7 @@ rustup install nightly
 You can then run the tests with:
 
 ```
-cargo test
+cargo +nightly test
 ```
 
 ## Usage
@@ -27,7 +27,7 @@ cargo test
 Start with an empty tree:
 
 ```rust
-let mut tree_root = FullNode(vec![EmptySlot; 16]);
+let mut tree_root = Node::FullNode(vec![Node::EmptySlot; 16]);
 ```
 
 This creates a mutable tree root, which is a node with 16 (currently empty) children.
@@ -51,7 +51,7 @@ let hash = new_root.hash();
 Call `make_multiproof` with the root of the tree and the list of values to be changed. It returns a `Multiproof` object, which can be sent to the verifier over the network; The example below will create a proof for the replacement of the value of leaf `0x11...11` with `0x44..444`:
 
 ```rust
-let proof = make_multiproof(new_root, vec![(vec![1u8; 32], vec![4u8; 32])]).unwrap();
+let proof = make_multiproof(&new_root, vec![(vec![1u8; 32], vec![4u8; 32])]).unwrap();
 ```
 
 ### Verifying proof
@@ -59,7 +59,7 @@ let proof = make_multiproof(new_root, vec![(vec![1u8; 32], vec![4u8; 32])]).unwr
 Call the `rebuild` function on the output of `make_proof`:
 
 ```rust
-rebuild(&mut vec![], &proof)
+let root = rebuild(&mut vec![], &proof).unwrap();
 ```
 
 ### Examples
