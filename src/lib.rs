@@ -1281,4 +1281,27 @@ mod tests {
             }
         )
     }
+
+    #[test]
+    fn roundtrip() {
+        let mut tree_root = Node::FullNode(vec![Node::EmptySlot; 16]);
+        let new_root = insert_leaf(&mut tree_root, vec![1u8; 32], vec![2u8; 32]).unwrap();
+
+        assert_eq!(
+            new_root.hash(),
+            vec![
+                114, 160, 24, 24, 62, 155, 236, 89, 10, 222, 141, 21, 17, 158, 222, 152, 218, 192,
+                136, 220, 167, 233, 85, 104, 58, 2, 208, 43, 83, 189, 54, 57
+            ]
+        );
+
+        let proof = make_multiproof(&new_root, vec![(vec![1u8; 32], vec![2u8; 32])]).unwrap();
+
+        // RLP roundtrip
+        let proof_rlp = rlp::encode(&proof);
+        let proof = rlp::decode(&proof_rlp).unwrap();
+
+        let rebuilt_root = rebuild(&mut vec![], &proof).unwrap();
+        assert_eq!(new_root, rebuilt_root);
+    }
 }
