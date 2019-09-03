@@ -98,6 +98,12 @@ impl Node {
     }
 }
 
+const BRANCH_OPCODE: usize = 0;
+const HASHER_OPCODE: usize = 1;
+const LEAF_OPCODE: usize = 2;
+const EXTENSION_OPCODE: usize = 3;
+const ADD_OPCODE: usize = 4;
+
 #[derive(Debug, PartialEq)]
 pub enum Instruction {
     BRANCH(usize),
@@ -110,11 +116,13 @@ pub enum Instruction {
 impl rlp::Encodable for Instruction {
     fn rlp_append(&self, s: &mut rlp::RlpStream) {
         match self {
-            Instruction::EXTENSION(ref ext) => s.begin_list(2).append(&3usize).append_list(ext),
-            Instruction::BRANCH(size) => s.begin_list(2).append(&0usize).append(size),
-            Instruction::HASHER(size) => s.begin_list(2).append(&1usize).append(size),
-            Instruction::LEAF(size) => s.begin_list(2).append(&2usize).append(size),
-            Instruction::ADD(index) => s.begin_list(2).append(&4usize).append(index),
+            Instruction::EXTENSION(ref ext) => {
+                s.begin_list(2).append(&EXTENSION_OPCODE).append_list(ext)
+            }
+            Instruction::BRANCH(size) => s.begin_list(2).append(&BRANCH_OPCODE).append(size),
+            Instruction::HASHER(size) => s.begin_list(2).append(&HASHER_OPCODE).append(size),
+            Instruction::LEAF(size) => s.begin_list(2).append(&LEAF_OPCODE).append(size),
+            Instruction::ADD(index) => s.begin_list(2).append(&ADD_OPCODE).append(index),
         };
     }
 }
@@ -128,13 +136,13 @@ impl rlp::Decodable for Instruction {
             return Err(rlp::DecoderError::Custom("Invalid instruction opcode {}"));
         }
 
-        if instr != 3 {
+        if instr != EXTENSION_OPCODE {
             let size: usize = rlp.at(1usize)?.as_val()?;
             let i = match instr {
-                0 => Instruction::BRANCH(size),
-                1 => Instruction::HASHER(size),
-                2 => Instruction::LEAF(size),
-                4 => Instruction::ADD(size),
+                BRANCH_OPCODE => Instruction::BRANCH(size),
+                HASHER_OPCODE => Instruction::HASHER(size),
+                LEAF_OPCODE => Instruction::LEAF(size),
+                ADD_OPCODE => Instruction::ADD(size),
                 _ => panic!("This should never happen!"), /* Famous last words */
             };
 
