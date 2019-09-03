@@ -10,7 +10,7 @@ use utils::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node {
-    Hash(Vec<u8>, usize), // (Hash, # empty spaces)
+    Hash { hash: Vec<u8>, spaces: usize },
     Leaf(NibbleKey, Vec<u8>),
     Extension(NibbleKey, Box<Node>),
     FullNode(Vec<Node>),
@@ -93,7 +93,7 @@ impl Node {
                     encoding
                 }
             }
-            Hash(h, _) => h.to_vec(),
+            Hash { hash: h, spaces: _ } => h.to_vec(),
         }
     }
 }
@@ -199,7 +199,10 @@ pub fn rebuild(stack: &mut Vec<Node>, proof: &Multiproof) -> Result<Node, String
         match instr {
             HASHER(digit) => {
                 if let Some(h) = hiter.next() {
-                    stack.push(Hash(h.to_vec(), *digit));
+                    stack.push(Hash {
+                        hash: h.to_vec(),
+                        spaces: *digit,
+                    });
                 } else {
                     return Err(format!("Proof requires one more hash in HASHER({})", digit));
                 }
@@ -255,7 +258,7 @@ pub fn rebuild(stack: &mut Vec<Node>, proof: &Multiproof) -> Result<Node, String
                             // a child (el1) of the parent node (el2). this is done during resolve.
                             n2[*digit] = el1;
                         }
-                        Hash(_, _) => {
+                        Hash { hash: _, spaces: _ } => {
                             return Err(String::from("Hash node no longer supported in this case"))
                         }
                         _ => return Err(String::from("Unexpected node type")),
@@ -501,7 +504,9 @@ pub fn make_multiproof(
             instructions.append(&mut proof.instructions);
             values.append(&mut proof.keyvals);
         }
-        Hash(_, _) => return Err("Should not have encountered a Hash in this context".to_string()),
+        Hash { hash: _, spaces: _ } => {
+            return Err("Should not have encountered a Hash in this context".to_string())
+        }
     }
 
     Ok(Multiproof {
@@ -572,13 +577,13 @@ mod tests {
                 EmptySlot,
                 EmptySlot,
                 EmptySlot,
-                Hash(
-                    vec![
+                Hash {
+                    hash: vec![
                         154, 251, 173, 154, 224, 13, 237, 90, 6, 107, 214, 240, 236, 103, 164, 93,
                         81, 243, 28, 37, 128, 102, 185, 151, 233, 187, 131, 54, 188, 19, 235, 168
                     ],
-                    0
-                ),
+                    spaces: 0
+                },
                 EmptySlot,
                 EmptySlot,
                 EmptySlot,
