@@ -59,7 +59,7 @@ let proof = make_multiproof(&new_root, vec![(vec![1u8; 32], vec![4u8; 32])]).unw
 Call the `rebuild` function on the output of `make_proof`:
 
 ```rust
-let root = rebuild(&mut vec![], &proof).unwrap();
+let root = rebuild(&proof).unwrap();
 ```
 
 ### Examples

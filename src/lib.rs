@@ -184,7 +184,7 @@ impl rlp::Decodable for Multiproof {
 }
 
 // Rebuilds the tree based on the multiproof components
-pub fn rebuild(stack: &mut Vec<Node>, proof: &Multiproof) -> Result<Node, String> {
+pub fn rebuild(proof: &Multiproof) -> Result<Node, String> {
     use Instruction::*;
     use Node::*;
 
@@ -194,6 +194,8 @@ pub fn rebuild(stack: &mut Vec<Node>, proof: &Multiproof) -> Result<Node, String
         // Deserialize the keys as they are read
         rlp::decode::<Node>(encoded).unwrap()
     });
+
+    let mut stack = Vec::<Node>::new();
 
     for instr in iiter {
         match instr {
@@ -535,13 +537,12 @@ mod tests {
 
         let proof = make_multiproof(&root, changes.clone()).unwrap();
 
-        let mut stack = Vec::new();
         let proof = Multiproof {
             hashes: proof.hashes,
             keyvals: proof.keyvals,
             instructions: proof.instructions,
         };
-        let new_root = rebuild(&mut stack, &proof).unwrap();
+        let new_root = rebuild(&proof).unwrap();
 
         assert_eq!(
             new_root,
@@ -712,8 +713,7 @@ mod tests {
 
         let proof = make_multiproof(&root, vec![(vec![2u8; 32], vec![0u8; 32])]).unwrap();
 
-        let mut stack = Vec::new();
-        let res = rebuild(&mut stack, &proof);
+        let res = rebuild(&proof);
 
         assert_eq!(res.unwrap().hash(), pre_root_hash);
     }
@@ -1070,7 +1070,6 @@ mod tests {
 
     #[test]
     fn tree_with_just_one_leaf() {
-        let mut stack = Vec::new();
         let proof = Multiproof {
             hashes: vec![],
             keyvals: vec![rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![
@@ -1079,13 +1078,12 @@ mod tests {
             ])],
             instructions: vec![LEAF(0)],
         };
-        let out = rebuild(&mut stack, &proof).unwrap();
+        let out = rebuild(&proof).unwrap();
         assert_eq!(out, Leaf(NibbleKey::new(vec![]), vec![4, 5, 6]))
     }
 
     #[test]
     fn tree_with_one_branch() {
-        let mut stack = Vec::new();
         let proof = Multiproof {
             hashes: vec![],
             keyvals: vec![rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![
@@ -1094,7 +1092,7 @@ mod tests {
             ])],
             instructions: vec![LEAF(0), BRANCH(0)],
         };
-        let out = rebuild(&mut stack, &proof).unwrap();
+        let out = rebuild(&proof).unwrap();
         assert_eq!(
             out,
             FullNode(vec![
@@ -1120,7 +1118,6 @@ mod tests {
 
     #[test]
     fn tree_with_added_branch() {
-        let mut stack = Vec::new();
         let proof = Multiproof {
             hashes: vec![],
             keyvals: vec![
@@ -1129,7 +1126,7 @@ mod tests {
             ],
             instructions: vec![LEAF(0), BRANCH(0), LEAF(1), ADD(2)],
         };
-        let out = rebuild(&mut stack, &proof).unwrap();
+        let out = rebuild(&proof).unwrap();
         assert_eq!(
             out,
             FullNode(vec![
@@ -1155,7 +1152,6 @@ mod tests {
 
     #[test]
     fn tree_with_extension() {
-        let mut stack = Vec::new();
         let proof = Multiproof {
             hashes: vec![],
             instructions: vec![
@@ -1170,7 +1166,7 @@ mod tests {
                 rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![7, 8, 9], vec![10, 11, 12]]),
             ],
         };
-        let out = rebuild(&mut stack, &proof).unwrap();
+        let out = rebuild(&proof).unwrap();
         assert_eq!(
             out,
             Extension(
