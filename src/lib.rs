@@ -94,6 +94,24 @@ impl Node {
     }
 }
 
+trait NodeEncoding
+where
+    Self: std::marker::Sized,
+{
+    fn decode<T: AsRef<[u8]>>(input: T) -> Result<Self, ()>;
+    fn encode(&self) -> Result<Vec<u8>, ()>;
+}
+
+impl NodeEncoding for Node {
+    fn decode<T: AsRef<[u8]>>(input: T) -> Result<Self, ()> {
+        // FIXME: support error translation from rlp::DecodeError
+        Ok(rlp::decode::<Node>(input.as_ref()).unwrap())
+    }
+    fn encode(&self) -> Result<Vec<u8>, ()> {
+        Ok(rlp::encode(self))
+    }
+}
+
 const BRANCH_OPCODE: usize = 0;
 const HASHER_OPCODE: usize = 1;
 const LEAF_OPCODE: usize = 2;
@@ -207,7 +225,7 @@ pub fn rebuild(proof: &Multiproof) -> Result<Node, String> {
     let iiter = proof.instructions.iter();
     let mut kviter = proof.keyvals.iter().map(|encoded| {
         // Deserialize the keys as they are read
-        rlp::decode::<Node>(encoded).unwrap()
+        Node::decode(encoded).unwrap()
     });
 
     let mut stack = Vec::<Node>::new();
@@ -496,8 +514,8 @@ pub fn make_multiproof(root: &Node, keys: Vec<NibbleKey>) -> Result<Multiproof, 
 
             if *leafkey == keys[0] {
                 instructions.push(Instruction::LEAF(leafkey.len()));
-                let rlp = rlp::encode(&Leaf(leafkey.clone(), leafval.clone()));
-                values.push(rlp);
+                let leaf = Leaf(leafkey.clone(), leafval.clone());
+                values.push(leaf.encode().unwrap());
             } else {
                 return Err(format!(
                     "Trying to apply the wrong key {:?} != {:?}",
