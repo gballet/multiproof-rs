@@ -1,10 +1,14 @@
 #![feature(box_syntax, box_patterns)]
 
+extern crate hex;
 extern crate rlp;
+extern crate serde;
 extern crate sha3;
 
 pub mod utils;
 
+use serde::de::{MapAccess, Visitor};
+use serde::{Deserialize, Deserializer};
 use sha3::{Digest, Keccak256};
 use utils::*;
 
@@ -15,6 +19,45 @@ pub enum Node {
     Extension(NibbleKey, Box<Node>),
     FullNode(Vec<Node>),
     EmptySlot,
+}
+
+impl<'de> Deserialize<'de> for Node {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct NodeVisitor;
+
+        impl<'de> Visitor<'de> for NodeVisitor {
+            type Value = Node;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("A map object whose keys are the account addresses and values describe the account")
+            }
+
+            fn visit_map<M>(self, mut map: M) -> Result<Node, M::Error>
+            where
+                M: MapAccess<'de>,
+            {
+                let mut root = Node::FullNode(vec![Node::EmptySlot; 16]);
+                loop {
+                    let entry: Option<(&str, &str)> = map.next_entry()?;
+                    if let Some((k, v)) = entry {
+                        let key: Vec<u8> = hex::decode(k).unwrap().into();
+                        let value: Vec<u8> = hex::decode(v).unwrap().into();
+
+                        // FIXME handle error properly
+                        root = insert_leaf(&mut root, key, value).unwrap();
+                    } else {
+                        break;
+                    }
+                }
+                Ok(root)
+            }
+        }
+
+        deserializer.deserialize_map(NodeVisitor)
+    }
 }
 
 impl rlp::Encodable for Node {
@@ -515,7 +558,6 @@ pub fn make_multiproof(
 
 #[cfg(test)]
 mod tests {
-    extern crate hex;
     //extern crate rand;
 
     use super::Instruction::*;
@@ -1284,5 +1326,19 @@ mod tests {
                 instructions: vec![LEAF(0)]
             }
         )
+    }
+
+    #[test]
+    fn json_deserialization_test() {
+        let json = "{
+            \"0x0123456789012345678901234567890123456789012345678901234567890123\": {
+                \"balance\": \"0x100\",
+                \"nonce\": \"0x01\",
+                \"storage\": {},
+                \"code\": \"\"
+            }
+        }";
+        let root : Node = serde_json::from_str(json).unwrap();
+        assert_eq!(root, EmptySlot);
     }
 }
