@@ -1,7 +1,7 @@
 #[derive(Debug, PartialEq, Clone)]
 pub struct NibbleKey(Vec<u8>);
 #[derive(Debug, PartialEq, Clone)]
-pub struct ByteKey(Vec<u8>);
+pub struct ByteKey(pub Vec<u8>);
 
 impl From<ByteKey> for NibbleKey {
     fn from(address: ByteKey) -> Self {
@@ -116,6 +116,38 @@ impl From<NibbleKey> for ByteKey {
     }
 }
 
+pub fn remove_indicator_prefix(key_nibbles: Vec<u8>) -> Vec<u8> {
+    // only leaf nodes and extension nodes have an indicator prefix
+    if key_nibbles[0] == 1 || key_nibbles[0] == 3 {
+        // if indicator byte is 1, it's an odd-length non-terminal node (extension node)
+        // if 3, it's an odd-length terminal node (leaf node)
+        key_nibbles[1..].to_vec()
+    } else {
+        // if even, should prefix should be either 0 or 2
+        key_nibbles[2..].to_vec()
+    }
+}
+
+pub fn add_indicator_prefix(key_nibbles: Vec<u8>, is_terminator: bool) -> Vec<u8> {
+    let mut prefixed_key_nibbles = key_nibbles.clone();
+    // add indicator nibbles to leaf key
+    if (prefixed_key_nibbles.len() % 2) == 1 {
+        // if length is odd, prepend nibble `1`. will be even after prepending
+        prefixed_key_nibbles.insert(0, 1);
+    } else {
+        // if length is even, prepend two `0` nibbles
+        prefixed_key_nibbles.insert(0, 0);
+        prefixed_key_nibbles.insert(0, 0);
+    }
+
+    // if node is a leaf, indicate it's a terminator node
+    if is_terminator {
+        prefixed_key_nibbles[0] += 2;
+    }
+
+    prefixed_key_nibbles
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -145,7 +177,7 @@ mod tests {
     #[test]
     fn test_empty_suffix() {
         let nibbles = NibbleKey(vec![0xd, 0xe, 0xa, 0xd, 0xb, 0xe, 0xe, 0xf]);
-        assert_eq!(nibbles[nibbles.len()..], vec![][..]);
+        assert_eq!(nibbles[nibbles.len()..], vec![0u8; 0][..]);
     }
 
     #[test]
@@ -157,6 +189,6 @@ mod tests {
     #[test]
     fn test_empty_prefix() {
         let nibbles = NibbleKey(vec![0xd, 0xe, 0xa, 0xd, 0xb, 0xe, 0xe, 0xf]);
-        assert_eq!(nibbles[..0], vec![][..]);
+        assert_eq!(nibbles[..0], vec![0u8; 0][..]);
     }
 }
