@@ -61,10 +61,7 @@ impl rlp::Decodable for Node {
         let key_bytes = utils::ByteKey(keyval[0].clone());
         let key_nibbles = NibbleKey::from(key_bytes);
         // TODO: remove indicator prefix if node is a leaf or extension
-        Ok(Node::Leaf(
-            key_nibbles,
-            keyval[1].clone(),
-        ))
+        Ok(Node::Leaf(key_nibbles, keyval[1].clone()))
     }
 }
 
@@ -591,8 +588,8 @@ mod tests {
                 EmptySlot,
                 Hash(
                     vec![
-                        154, 251, 173, 154, 224, 13, 237, 90, 6, 107, 214, 240, 236, 103, 164, 93,
-                        81, 243, 28, 37, 128, 102, 185, 151, 233, 187, 131, 54, 188, 19, 235, 168
+                        14, 142, 96, 165, 156, 5, 72, 38, 156, 85, 14, 69, 181, 246, 113, 175, 254,
+                        205, 123, 70, 93, 101, 33, 244, 149, 177, 98, 113, 75, 151, 252, 227
                     ],
                     0
                 ),
@@ -758,11 +755,19 @@ mod tests {
             let byte_key = utils::ByteKey(address_hash.to_vec());
             let address_hash_nibbles = NibbleKey::from(byte_key);
 
-            insert_leaf(&mut root, address_hash_nibbles.into(), account_leaf_val.clone()).unwrap();
+            insert_leaf(
+                &mut root,
+                address_hash_nibbles.into(),
+                account_leaf_val.clone(),
+            )
+            .unwrap();
         });
 
         let pre_root_hash = root.hash();
-        assert_eq!(hex::encode(pre_root_hash), "b3c418cb00ad7c907176be86a5a21759b74bd3828ed62a1ea2ae8daea98c5da2");
+        assert_eq!(
+            hex::encode(pre_root_hash),
+            "b3c418cb00ad7c907176be86a5a21759b74bd3828ed62a1ea2ae8daea98c5da2"
+        );
     }
 
     #[test]
@@ -1248,17 +1253,17 @@ mod tests {
     fn single_value_hash() {
         assert_eq!(
             Leaf(NibbleKey::new(vec![1, 2, 3]), vec![4, 5, 6]).hash(),
-            vec![200, 131, 1, 2, 3, 131, 4, 5, 6]
+            vec![199, 130, 49, 35, 131, 4, 5, 6]
         );
     }
 
     #[test]
     fn big_value_single_key_hash() {
         assert_eq!(
-            Leaf(NibbleKey::new(vec![0u8; 32]), vec![4, 5, 6]).hash(),
+            Leaf(NibbleKey::new(vec![0u8; 32]), vec![4u8; 32]).hash(),
             vec![
-                0, 77, 126, 218, 113, 171, 7, 238, 113, 12, 152, 238, 20, 175, 97, 155, 196, 30,
-                204, 126, 160, 234, 193, 58, 113, 98, 12, 214, 67, 79, 220, 254
+                99, 116, 144, 157, 101, 254, 188, 135, 196, 46, 49, 240, 157, 79, 192, 61, 117,
+                243, 84, 131, 36, 12, 147, 251, 17, 134, 48, 59, 76, 39, 205, 106
             ]
         );
     }
@@ -1268,8 +1273,8 @@ mod tests {
         assert_eq!(
             Leaf(NibbleKey::new(vec![0u8; 32]), vec![1u8; 32]).hash(),
             vec![
-                39, 97, 78, 243, 73, 225, 199, 242, 196, 228, 21, 194, 103, 85, 166, 247, 138, 229,
-                54, 32, 16, 17, 243, 46, 71, 115, 81, 139, 131, 214, 203, 184
+                132, 254, 5, 139, 174, 187, 212, 158, 12, 39, 213, 88, 18, 194, 107, 214, 83, 52,
+                2, 1, 66, 133, 239, 172, 206, 141, 135, 220, 34, 196, 98, 222
             ]
         );
     }
@@ -1303,8 +1308,8 @@ mod tests {
             ])
             .hash(),
             vec![
-                220, 134, 197, 128, 131, 4, 5, 6, 128, 134, 197, 9, 131, 10, 11, 12, 128, 128, 128,
-                128, 128, 128, 128, 128, 128, 128, 128, 128, 128
+                221, 134, 197, 32, 131, 4, 5, 6, 128, 134, 197, 57, 131, 10, 11, 12, 128, 128, 128,
+                128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128
             ]
         );
     }
