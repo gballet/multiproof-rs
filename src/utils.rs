@@ -3,6 +3,12 @@ pub struct NibbleKey(Vec<u8>);
 #[derive(Debug, PartialEq, Clone)]
 pub struct ByteKey(pub Vec<u8>);
 
+impl From<Vec<u8>> for ByteKey {
+    fn from(bytes: Vec<u8>) -> Self {
+        ByteKey(bytes)
+    }
+}
+
 impl From<ByteKey> for NibbleKey {
     fn from(address: ByteKey) -> Self {
         let mut nibbles = Vec::new();
@@ -55,6 +61,26 @@ impl NibbleKey {
 
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    pub fn with_hex_prefix(&self, is_terminator: bool) -> Vec<u8> {
+        let ft = if is_terminator { 2 } else { 1 };
+        let mut output = vec![0u8; self.0.len() / 2 + 1];
+
+        // add indicator nibbles to leaf key
+        output[0] = if self.0.len() % 2 == 1 {
+            16 * (ft + 1) + self.0[0]
+        } else {
+            16 * ft
+        };
+
+        // Turn the list of nibbles into a list of bytes
+        for i in 0..output.len() - 1 {
+            let base = self.0.len() % 2;
+            output[i + 1] = (16 * self.0[base + 2 * i]) | self.0[base + 1 + 2 * i];
+        }
+
+        output
     }
 }
 
@@ -126,26 +152,6 @@ pub fn remove_indicator_prefix(key_nibbles: Vec<u8>) -> Vec<u8> {
         // if even, should prefix should be either 0 or 2
         key_nibbles[2..].to_vec()
     }
-}
-
-pub fn add_indicator_prefix(key_nibbles: Vec<u8>, is_terminator: bool) -> Vec<u8> {
-    let mut prefixed_key_nibbles = key_nibbles.clone();
-    // add indicator nibbles to leaf key
-    if (prefixed_key_nibbles.len() % 2) == 1 {
-        // if length is odd, prepend nibble `1`. will be even after prepending
-        prefixed_key_nibbles.insert(0, 1);
-    } else {
-        // if length is even, prepend two `0` nibbles
-        prefixed_key_nibbles.insert(0, 0);
-        prefixed_key_nibbles.insert(0, 0);
-    }
-
-    // if node is a leaf, indicate it's a terminator node
-    if is_terminator {
-        prefixed_key_nibbles[0] += 2;
-    }
-
-    prefixed_key_nibbles
 }
 
 #[cfg(test)]
