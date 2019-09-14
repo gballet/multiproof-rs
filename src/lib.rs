@@ -760,9 +760,27 @@ mod tests {
             hasher.input(&address_bytes);
             let address_hash = Vec::<u8>::from(&hasher.result()[..]);
             let byte_key = utils::ByteKey(address_hash.to_vec());
-            let address_hash_nibbles = NibbleKey::from(byte_key);
 
-            insert_leaf(&mut root, &address_hash_nibbles, account_leaf_val.clone()).unwrap();
+            let val_obj = v_obj[key].as_object().unwrap();
+            let balance = hex::decode(&val_obj["balance"].as_str().unwrap()[2..]).unwrap();
+            let code =
+                hex::decode("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+                    .unwrap(); // val_obj["code"].as_str().unwrap();
+            let mut nonce: Vec<u8> = hex::decode(&val_obj["nonce"].as_str().unwrap()[2..]).unwrap();
+            if nonce.len() == 1 && nonce[0] == 0 {
+                nonce = vec![];
+            }
+            let storage_hash =
+                hex::decode("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470")
+                    .unwrap();
+            let mut stream = rlp::RlpStream::new_list(4);
+            stream
+                .append(&nonce)
+                .append(&balance)
+                .append(&code)
+                .append(&storage_hash);
+            let encoding = stream.out();
+            insert_leaf(&mut root, &NibbleKey::from(byte_key), encoding).unwrap();
         });
 
         let pre_root_hash = root.hash();
