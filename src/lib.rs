@@ -762,12 +762,7 @@ mod tests {
             let byte_key = utils::ByteKey(address_hash.to_vec());
             let address_hash_nibbles = NibbleKey::from(byte_key);
 
-            insert_leaf(
-                &mut root,
-                address_hash_nibbles.into(),
-                account_leaf_val.clone(),
-            )
-            .unwrap();
+            insert_leaf(&mut root, &address_hash_nibbles, account_leaf_val.clone()).unwrap();
         });
 
         let pre_root_hash = root.hash();

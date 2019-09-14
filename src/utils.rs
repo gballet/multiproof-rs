@@ -64,7 +64,7 @@ impl NibbleKey {
     }
 
     pub fn with_hex_prefix(&self, is_terminator: bool) -> Vec<u8> {
-        let ft = if is_terminator { 2 } else { 1 };
+        let ft = if is_terminator { 2 } else { 0 };
         let mut output = vec![0u8; self.0.len() / 2 + 1];
 
         // add indicator nibbles to leaf key
