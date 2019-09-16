@@ -48,15 +48,15 @@ let hash = new_root.hash();
 
 ### Creating the proof
 
-Call `make_multiproof` with the root of the tree and the list of values to be changed. It returns a `Multiproof` object, which can be sent to the verifier over the network; The example below will create a proof for the replacement of the value of leaf `0x11...11` with `0x44..444`:
+Call `make_multiproof` with the root of the tree and the list of keys to be changed. It returns a `Multiproof` object, which can be sent to the verifier over the network; The example below will create a proof for leaf `0x11...11`:
 
 ```rust
-let proof = make_multiproof(&new_root, vec![(vec![1u8; 32], vec![4u8; 32])]).unwrap();
+let proof = make_multiproof(&new_root, vec![NibbleKey::from(vec![1u8; 32])]).unwrap();
 ```
 
 ### Verifying proof
 
-Call the `rebuild` function on the output of `make_proof`:
+Call the `rebuild` function on the output of `make_multiproof`:
 
 ```rust
 let root = rebuild(&proof).unwrap();
