@@ -418,10 +418,7 @@ pub fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node
 
 // Helper function that generates a multiproof based on one `(key.value)`
 // pair.
-pub fn make_multiproof(
-    root: &Node,
-    keyvals: Vec<(Vec<u8>, Vec<u8>)>,
-) -> Result<Multiproof, String> {
+pub fn make_multiproof(root: &Node, keys: Vec<NibbleKey>) -> Result<Multiproof, String> {
     use Node::*;
 
     let mut instructions = Vec::new();
@@ -430,7 +427,7 @@ pub fn make_multiproof(
 
     // If there are no keys specified at this node, then just hash that
     // node.
-    if keyvals.len() == 0 {
+    if keys.len() == 0 {
         return Ok(Multiproof {
             instructions: vec![Instruction::HASHER(0)],
             hashes: vec![root.hash()],
@@ -442,26 +439,26 @@ pub fn make_multiproof(
     match root {
         EmptySlot => return Err("Cannot build a multiproof on an empty slot".to_string()),
         FullNode(ref vec) => {
-            // Split the current (key,value) tuples based on the first
-            // nibble of their keys. Build a recursion table.
-            let mut split = vec![Vec::new(); 16];
-            for (k, v) in keyvals.iter() {
+            // Split the current keys based on their first nibble, in order
+            // to dispatch each key to the proper sublevel.
+            let mut dispatch = vec![Vec::new(); 16];
+            for k in keys.iter() {
                 let idx = k[0] as usize;
-                split[idx].push((k[1..].to_vec(), v.to_vec()));
+                dispatch[idx].push(NibbleKey::from(&k[1..]));
             }
 
-            // Now recurse on each selector. If the recursion table is
-            // empty, then the subnode needs to be hashed. Otherwise,
-            // we must recurse.
+            // Now recurse on each selector. If the dispatch table entry
+            // is empty, then the subnode needs to be hashed. Otherwise,
+            // recurse on the subnode, with the subkeys.
             // `branch` is set to true at first, which is meant to add
             // a `BRANCH` instruction the first time that a child is
             // added to the node. All subsequent adds will be performed
             // by an `ADD` instruction.
             let mut branch = true;
-            for (selector, subkeys) in split.iter().enumerate() {
+            for (selector, subkeys) in dispatch.iter().enumerate() {
                 // Does the child have any key? If not, it will be hashed
                 // and a `HASHER` instruction will be added to the list.
-                if split[selector].len() == 0 {
+                if dispatch[selector].len() == 0 {
                     // Empty slots are not to be hashed
                     if vec[selector] != EmptySlot {
                         instructions.push(Instruction::HASHER(0));
@@ -487,38 +484,43 @@ pub fn make_multiproof(
                 }
             }
         }
-        Leaf(leafkey, _) => {
-            if keyvals.len() != 1 {
+        Leaf(leafkey, leafval) => {
+            // This is the simplest case: the key that is found at this
+            // level in the recursion needs to match the unique one in
+            // the list of keys that belong to the proof.
+            if keys.len() != 1 {
                 return Err(format!(
                     "Expecting exactly 1 key in leaf, got {}: {:?}",
-                    keyvals.len(),
-                    keyvals
+                    keys.len(),
+                    keys
                 )
                 .to_string());
             }
 
-            let key = &keyvals[0].0;
-            if *leafkey == NibbleKey::new(key.to_vec()) {
-                instructions.push(Instruction::LEAF(key.len()));
-                let rlp = rlp::encode(&Leaf(NibbleKey::new(key.clone()), keyvals[0].1.clone()));
+            if *leafkey == keys[0] {
+                instructions.push(Instruction::LEAF(leafkey.len()));
+                let rlp = rlp::encode(&Leaf(leafkey.clone(), leafval.clone()));
                 values.push(rlp);
             } else {
-                return Err(
-                    format!("Trying to apply the wrong key {:?} != {:?}", key, leafkey).to_string(),
-                );
+                return Err(format!(
+                    "Trying to apply the wrong key {:?} != {:?}",
+                    keys[0], leafkey
+                )
+                .to_string());
             }
         }
         Extension(extkey, box child) => {
-            // Make sure that all the keys follow the extension and
-            // if so, then recurse.
+            // Make sure that all keys have the same prefix, corresponding
+            // to the extension. If that is the case, recurse with the
+            // prefix removed.
             let mut truncated = vec![];
-            for (k, v) in keyvals.iter() {
-                if extkey.factor_length(&NibbleKey::new(k.clone())) != extkey.len() {
+            for k in keys.iter() {
+                if extkey.factor_length(k) != extkey.len() {
                     return Err(
                         format!("One of the keys isn't present in the tree: {:?}", k).to_string(),
                     );
                 }
-                truncated.push((k.to_vec(), v.to_vec()));
+                truncated.push(k.clone());
             }
             let mut proof = make_multiproof(child, truncated)?;
             hashes.append(&mut proof.hashes);
@@ -552,12 +554,12 @@ mod tests {
         insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]).unwrap();
         insert_leaf(&mut root, vec![8u8; 32], vec![150u8; 32]).unwrap();
 
-        let changes = vec![
-            (vec![2u8; 32], vec![4u8; 32]),
-            (vec![1u8; 32], vec![8u8; 32]),
+        let keys = vec![
+            NibbleKey::from(vec![2u8; 32]),
+            NibbleKey::from(vec![1u8; 32]),
         ];
 
-        let proof = make_multiproof(&root, changes.clone()).unwrap();
+        let proof = make_multiproof(&root, keys.clone()).unwrap();
 
         let proof = Multiproof {
             hashes: proof.hashes,
@@ -570,26 +572,8 @@ mod tests {
             new_root,
             FullNode(vec![
                 EmptySlot,
-                Leaf(
-                    NibbleKey::new(vec![
-                        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                        1, 1, 1, 1, 1, 1
-                    ]),
-                    vec![
-                        8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
-                        8, 8, 8, 8, 8, 8, 8
-                    ]
-                ),
-                Leaf(
-                    NibbleKey::new(vec![
-                        2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-                        2, 2, 2, 2, 2, 2
-                    ]),
-                    vec![
-                        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-                        4, 4, 4, 4, 4, 4, 4
-                    ]
-                ),
+                Leaf(NibbleKey::new(vec![1u8; 31]), vec![1u8; 32]),
+                Leaf(NibbleKey::new(vec![2u8; 31]), vec![0u8; 32]),
                 EmptySlot,
                 EmptySlot,
                 EmptySlot,
@@ -623,8 +607,8 @@ mod tests {
         let proof = make_multiproof(
             &root,
             vec![
-                (vec![2u8; 32], vec![4u8; 32]),
-                (vec![1u8; 32], vec![8u8; 32]),
+                NibbleKey::from(vec![2u8; 32]),
+                NibbleKey::from(vec![1u8; 32]),
             ],
         )
         .unwrap();
@@ -658,11 +642,11 @@ mod tests {
         assert_eq!(v.len(), 2);
         assert_eq!(
             v[0],
-            rlp::encode(&Leaf(NibbleKey::new(vec![1u8; 31]), vec![8u8; 32]))
+            rlp::encode(&Leaf(NibbleKey::new(vec![1u8; 31]), vec![1u8; 32]))
         );
         assert_eq!(
             v[1],
-            rlp::encode(&Leaf(NibbleKey::new(vec![2u8; 31]), vec![4u8; 32]))
+            rlp::encode(&Leaf(NibbleKey::new(vec![2u8; 31]), vec![0u8; 32]))
         );
     }
 
@@ -672,7 +656,7 @@ mod tests {
         insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]).unwrap();
         insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]).unwrap();
 
-        let proof = make_multiproof(&root, vec![(vec![1u8; 32], vec![1u8; 32])]).unwrap();
+        let proof = make_multiproof(&root, vec![NibbleKey::from(vec![1u8; 32])]).unwrap();
         let i = proof.instructions;
         let v = proof.keyvals;
         let h = proof.hashes;
@@ -721,7 +705,7 @@ mod tests {
     fn make_multiproof_empty_tree() {
         let root = FullNode(vec![EmptySlot; 16]);
 
-        let out = make_multiproof(&root, vec![(vec![1u8; 32], vec![1u8; 32])]);
+        let out = make_multiproof(&root, vec![NibbleKey::from(vec![1u8; 32])]);
         assert!(out.is_err());
     }
 
@@ -733,7 +717,7 @@ mod tests {
 
         let pre_root_hash = root.hash();
 
-        let proof = make_multiproof(&root, vec![(vec![2u8; 32], vec![0u8; 32])]).unwrap();
+        let proof = make_multiproof(&root, vec![NibbleKey::from(vec![2u8; 32])]).unwrap();
 
         let res = rebuild(&proof);
 
@@ -1354,12 +1338,12 @@ mod tests {
         assert_eq!(
             new_root.hash(),
             vec![
-                114, 160, 24, 24, 62, 155, 236, 89, 10, 222, 141, 21, 17, 158, 222, 152, 218, 192,
-                136, 220, 167, 233, 85, 104, 58, 2, 208, 43, 83, 189, 54, 57
+                86, 102, 96, 191, 106, 199, 70, 178, 131, 236, 157, 14, 50, 168, 100, 69, 123, 66,
+                223, 122, 0, 97, 18, 144, 20, 79, 250, 219, 73, 190, 134, 108
             ]
         );
 
-        let proof = make_multiproof(&new_root, vec![(vec![1u8; 32], vec![2u8; 32])]).unwrap();
+        let proof = make_multiproof(&new_root, vec![NibbleKey::from(vec![1u8; 32])]).unwrap();
 
         // RLP roundtrip
         let proof_rlp = rlp::encode(&proof);

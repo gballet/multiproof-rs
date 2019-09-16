@@ -21,6 +21,12 @@ impl From<Vec<u8>> for NibbleKey {
     }
 }
 
+impl From<&[u8]> for NibbleKey {
+    fn from(nibbles: &[u8]) -> Self {
+        NibbleKey::from(nibbles.to_vec())
+    }
+}
+
 impl NibbleKey {
     pub fn new(nibbles: Vec<u8>) -> Self {
         for nibble in nibbles.iter() {
