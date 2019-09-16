@@ -1167,6 +1167,26 @@ mod tests {
     }
 
     #[test]
+    fn insert_leaf_two_embedded_nodes() {
+        let expected_root =
+            hex_string_to_vec("0x1e1f73cc50d595585797d261df5be9bf69037a57e6470c9e4ffc87b6221ab67a");
+        let inputs = [
+            ["0x1111111111111111111111111111111111111111", "0xffff"],
+            ["0x2222222222222222222222222222222222222222", "0xeeee"],
+        ];
+
+        let mut root = FullNode(vec![EmptySlot; 16]);
+        for i in &inputs {
+            let k = NibbleKey::from(utils::ByteKey(hex_string_to_vec(i[0])));
+            let v = hex_string_to_vec(i[1]);
+            insert_leaf(&mut root, k.into(), v);
+        }
+
+        let root_hash = root.hash();
+        assert_eq!(expected_root, root_hash);
+    }
+
+    #[test]
     fn tree_with_just_one_leaf() {
         let proof = Multiproof {
             hashes: vec![],
@@ -1410,5 +1430,13 @@ mod tests {
 
         let rebuilt_root = rebuild(&proof).unwrap();
         assert_eq!(new_root, rebuilt_root);
+    }
+
+    fn hex_string_to_vec(s: &str) -> Vec<u8> {
+        // Assumes `0x` prefix
+        (2..s.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap())
+            .collect()
     }
 }
