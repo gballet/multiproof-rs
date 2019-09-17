@@ -63,6 +63,8 @@ impl NibbleKey {
         self.0.len()
     }
 
+    // This method encodes a nibble key to its hex prefix. The output
+    // is byte-encoded, so as to be stored immediately.
     pub fn with_hex_prefix(&self, is_terminator: bool) -> Vec<u8> {
         let ft = if is_terminator { 2 } else { 0 };
         let mut output = vec![0u8; self.0.len() / 2 + 1];
