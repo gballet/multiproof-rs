@@ -519,12 +519,13 @@ pub fn make_multiproof(root: &Node, keys: Vec<NibbleKey>) -> Result<Multiproof, 
                         format!("One of the keys isn't present in the tree: {:?}", k).to_string(),
                     );
                 }
-                truncated.push(k.clone());
+                truncated.push(NibbleKey::from(&k[extkey.len()..]));
             }
             let mut proof = make_multiproof(child, truncated)?;
             hashes.append(&mut proof.hashes);
             instructions.append(&mut proof.instructions);
             values.append(&mut proof.keyvals);
+            instructions.push(Instruction::EXTENSION(extkey.clone().into()));
         }
         Hash(_, _) => return Err("Should not have encountered a Hash in this context".to_string()),
     }
@@ -717,6 +718,35 @@ mod tests {
         let pre_root_hash = root.hash();
 
         let proof = make_multiproof(&root, vec![NibbleKey::from(vec![2u8; 32])]).unwrap();
+
+        let res = rebuild(&proof);
+
+        assert_eq!(res.unwrap().hash(), pre_root_hash);
+    }
+
+    #[test]
+    fn make_multiproof_two_leaves_with_extension() {
+        let inputs = [
+            ("0x1111111111111111111111111111111111111111", vec![15u8; 32]),
+            ("0x2222222222222222222222222222222222222222", vec![14u8; 32]),
+            ("0x1111111111333333333333333333333333333333", vec![13u8; 32]),
+        ];
+
+        let nibble_from_hex = |h| NibbleKey::from(utils::ByteKey(hex::decode(h).unwrap()));
+
+        let mut root = FullNode(vec![EmptySlot; 16]);
+        for i in &inputs {
+            let k = nibble_from_hex(&i.0[2..]);
+            insert_leaf(&mut root, &k, i.1.clone());
+        }
+
+        let pre_root_hash = root.hash();
+
+        let keys = vec![
+            nibble_from_hex(&inputs[2].0[2..]),
+            nibble_from_hex(&inputs[0].0[2..]),
+        ];
+        let proof = make_multiproof(&root, keys).unwrap();
 
         let res = rebuild(&proof);
 
