@@ -35,8 +35,10 @@ This creates a mutable tree root, which is a node with 16 (currently empty) chil
 You can use `insert_leaf` to add a `(key,value)` pair to that tree. This example adds `(0x11111..111, 0x22222..222)` to the tree that was created above:
 
 ```rust
-let new_root = insert_leaf(&mut tree_root, vec![1u8; 32], vec![2u8; 32]).unwrap();
+let new_root = insert_leaf(&mut tree_root, &NibbleKey::from(vec![1u8; 32]), vec![2u8; 32]).unwrap();
 ```
+
+Note that the key format is `&NibbleKey`, and no longer `Vec<u8>`.
 
 ### Calculating hashes
 

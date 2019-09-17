@@ -21,19 +21,15 @@ impl rlp::Encodable for Node {
     fn rlp_append(&self, s: &mut rlp::RlpStream) {
         match self {
             Node::Leaf(ref k, ref v) => {
-                let key_prefixed = add_indicator_prefix(k.clone().into(), true);
-                let key_nibbles = NibbleKey::from(key_prefixed.clone());
-                let l = ByteKey::from(key_nibbles).0;
-                s.append_list::<Vec<u8>, Vec<u8>>(&vec![l, v.to_vec()]);
+                s.append_list::<Vec<u8>, Vec<u8>>(&vec![k.with_hex_prefix(true), v.to_vec()]);
             }
             Node::Extension(ref ext, box node) => {
-                let key_prefixed = add_indicator_prefix(ext.clone().into(), false);
-                let ext_key_nibbles = NibbleKey::from(key_prefixed.clone());
-                let ext_key_bytes = ByteKey::from(ext_key_nibbles).0;
-
                 let extension_branch_hash = node.hash();
 
-                s.append_list::<Vec<u8>, Vec<u8>>(&vec![ext_key_bytes, extension_branch_hash]);
+                s.append_list::<Vec<u8>, Vec<u8>>(&vec![
+                    ext.with_hex_prefix(false),
+                    extension_branch_hash,
+                ]);
             }
             Node::FullNode(ref vec) => {
                 let mut child_refs = Vec::new();
@@ -298,7 +294,7 @@ pub fn rebuild(proof: &Multiproof) -> Result<Node, String> {
 
 // Insert a `(key,value)` pair into a (sub-)tree represented by `root`.
 // It returns the root of the updated (sub-)tree.
-pub fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node, String> {
+pub fn insert_leaf(root: &mut Node, key: &NibbleKey, value: Vec<u8>) -> Result<Node, String> {
     use Node::*;
 
     if key.len() == 0 {
@@ -309,7 +305,7 @@ pub fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node
         Leaf(leafkey, leafvalue) => {
             // Find the common part of the current key with that of the
             // leaf and create an intermediate full node.
-            let firstdiffindex = leafkey.factor_length(&NibbleKey::new(key.clone()));
+            let firstdiffindex = leafkey.factor_length(key);
 
             // Return an error if the leaf is already present.
             if firstdiffindex == key.len() {
@@ -346,8 +342,11 @@ pub fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node
             // Special case: key is longer than the extension key:
             // recurse on the child node.
             if firstdiffindex == extkey.len() {
-                let childroot =
-                    insert_leaf(&mut child.clone(), key[extkey.len()..].to_vec(), value)?;
+                let childroot = insert_leaf(
+                    &mut child.clone(),
+                    &NibbleKey::from(key[extkey.len()..].to_vec()),
+                    value,
+                )?;
                 return Ok(Extension(extkey.clone(), Box::new(childroot)));
             }
 
@@ -407,7 +406,7 @@ pub fn insert_leaf(root: &mut Node, key: Vec<u8>, value: Vec<u8>) -> Result<Node
                 // XXX check that the value is at least 1
                 Leaf(NibbleKey::new(key[1..].to_vec()), value)
             } else {
-                insert_leaf(&mut vec[idx], key[1..].to_vec(), value)?
+                insert_leaf(&mut vec[idx], &NibbleKey::from(key[1..].to_vec()), value)?
             };
             // Return the root node with an updated entry
             Ok(FullNode(vec.to_vec()))
@@ -550,9 +549,9 @@ mod tests {
     #[test]
     fn validate_tree() {
         let mut root = FullNode(vec![EmptySlot; 16]);
-        insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]).unwrap();
-        insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]).unwrap();
-        insert_leaf(&mut root, vec![8u8; 32], vec![150u8; 32]).unwrap();
+        insert_leaf(&mut root, &NibbleKey::from(vec![2u8; 32]), vec![0u8; 32]).unwrap();
+        insert_leaf(&mut root, &NibbleKey::from(vec![1u8; 32]), vec![1u8; 32]).unwrap();
+        insert_leaf(&mut root, &NibbleKey::from(vec![8u8; 32]), vec![150u8; 32]).unwrap();
 
         let keys = vec![
             NibbleKey::from(vec![2u8; 32]),
@@ -600,9 +599,9 @@ mod tests {
     #[test]
     fn make_multiproof_two_values() {
         let mut root = FullNode(vec![EmptySlot; 16]);
-        insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]).unwrap();
-        insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]).unwrap();
-        insert_leaf(&mut root, vec![8u8; 32], vec![150u8; 32]).unwrap();
+        insert_leaf(&mut root, &NibbleKey::from(vec![2u8; 32]), vec![0u8; 32]).unwrap();
+        insert_leaf(&mut root, &NibbleKey::from(vec![1u8; 32]), vec![1u8; 32]).unwrap();
+        insert_leaf(&mut root, &NibbleKey::from(vec![8u8; 32]), vec![150u8; 32]).unwrap();
 
         let proof = make_multiproof(
             &root,
@@ -653,8 +652,8 @@ mod tests {
     #[test]
     fn make_multiproof_single_value() {
         let mut root = FullNode(vec![EmptySlot; 16]);
-        insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]).unwrap();
-        insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]).unwrap();
+        insert_leaf(&mut root, &NibbleKey::from(vec![2u8; 32]), vec![0u8; 32]).unwrap();
+        insert_leaf(&mut root, &NibbleKey::from(vec![1u8; 32]), vec![1u8; 32]).unwrap();
 
         let proof = make_multiproof(&root, vec![NibbleKey::from(vec![1u8; 32])]).unwrap();
         let i = proof.instructions;
@@ -689,8 +688,8 @@ mod tests {
     #[test]
     fn make_multiproof_no_values() {
         let mut root = FullNode(vec![EmptySlot; 16]);
-        insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]).unwrap();
-        insert_leaf(&mut root, vec![1u8; 32], vec![1u8; 32]).unwrap();
+        insert_leaf(&mut root, &NibbleKey::from(vec![2u8; 32]), vec![0u8; 32]).unwrap();
+        insert_leaf(&mut root, &NibbleKey::from(vec![1u8; 32]), vec![1u8; 32]).unwrap();
 
         let proof = make_multiproof(&root, vec![]).unwrap();
         let i = proof.instructions;
@@ -712,8 +711,8 @@ mod tests {
     #[test]
     fn make_multiproof_hash_before_nested_nodes_in_branch() {
         let mut root = FullNode(vec![EmptySlot; 16]);
-        insert_leaf(&mut root, vec![1u8; 32], vec![0u8; 32]).unwrap();
-        insert_leaf(&mut root, vec![2u8; 32], vec![0u8; 32]).unwrap();
+        insert_leaf(&mut root, &NibbleKey::from(vec![1u8; 32]), vec![0u8; 32]).unwrap();
+        insert_leaf(&mut root, &NibbleKey::from(vec![2u8; 32]), vec![0u8; 32]).unwrap();
 
         let pre_root_hash = root.hash();
 
@@ -745,14 +744,27 @@ mod tests {
             hasher.input(&address_bytes);
             let address_hash = Vec::<u8>::from(&hasher.result()[..]);
             let byte_key = utils::ByteKey(address_hash.to_vec());
-            let address_hash_nibbles = NibbleKey::from(byte_key);
 
-            insert_leaf(
-                &mut root,
-                address_hash_nibbles.into(),
-                account_leaf_val.clone(),
-            )
-            .unwrap();
+            let val_obj = v_obj[key].as_object().unwrap();
+            let balance = hex::decode(&val_obj["balance"].as_str().unwrap()[2..]).unwrap();
+            let code =
+                hex::decode("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+                    .unwrap(); // val_obj["code"].as_str().unwrap();
+            let mut nonce: Vec<u8> = hex::decode(&val_obj["nonce"].as_str().unwrap()[2..]).unwrap();
+            if nonce.len() == 1 && nonce[0] == 0 {
+                nonce = vec![];
+            }
+            let storage_hash =
+                hex::decode("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470")
+                    .unwrap();
+            let mut stream = rlp::RlpStream::new_list(4);
+            stream
+                .append(&nonce)
+                .append(&balance)
+                .append(&code)
+                .append(&storage_hash);
+            let encoding = stream.out();
+            insert_leaf(&mut root, &NibbleKey::from(byte_key), encoding).unwrap();
         });
 
         let pre_root_hash = root.hash();
@@ -785,7 +797,7 @@ mod tests {
                 EmptySlot,
             ])),
         );
-        let out = insert_leaf(&mut root, vec![0u8; 32], vec![1u8; 32]).unwrap();
+        let out = insert_leaf(&mut root, &NibbleKey::from(vec![0u8; 32]), vec![1u8; 32]).unwrap();
         assert_eq!(
             out,
             Extension(
@@ -823,7 +835,7 @@ mod tests {
         key[1] = 0xe;
         key[2] = 0xa;
         key[3] = 0xd;
-        let out = insert_leaf(&mut root, key, vec![2u8; 32]).unwrap();
+        let out = insert_leaf(&mut root, &NibbleKey::from(key), vec![2u8; 32]).unwrap();
         assert_eq!(
             out,
             Extension(
@@ -856,7 +868,7 @@ mod tests {
             NibbleKey::new(vec![0xd, 0xe, 0xa, 0xd]),
             Box::new(Leaf(NibbleKey::new(vec![0u8; 24]), vec![1u8; 32])),
         );
-        let out = insert_leaf(&mut root, vec![2u8; 32], vec![1u8; 32]).unwrap();
+        let out = insert_leaf(&mut root, &NibbleKey::from(vec![2u8; 32]), vec![1u8; 32]).unwrap();
         assert_eq!(
             out,
             FullNode(vec![
@@ -892,7 +904,7 @@ mod tests {
         let mut key = vec![0u8; 32];
         key[0] = 0xd;
         key[1] = 0xe;
-        let out = insert_leaf(&mut root, key, vec![1u8; 32]).unwrap();
+        let out = insert_leaf(&mut root, &NibbleKey::from(key), vec![1u8; 32]).unwrap();
         assert_eq!(
             out,
             Extension(
@@ -932,7 +944,7 @@ mod tests {
         key[0] = 0xd;
         key[1] = 0xe;
         key[2] = 0xa;
-        let out = insert_leaf(&mut root, key, vec![1u8; 32]).unwrap();
+        let out = insert_leaf(&mut root, &NibbleKey::from(key), vec![1u8; 32]).unwrap();
         assert_eq!(
             out,
             Extension(
@@ -969,7 +981,7 @@ mod tests {
             *v = 2u8;
         }
         let mut root = Leaf(NibbleKey::new(key), vec![1u8; 32]);
-        let out = insert_leaf(&mut root, vec![2u8; 32], vec![1u8; 32]).unwrap();
+        let out = insert_leaf(&mut root, &NibbleKey::from(vec![2u8; 32]), vec![1u8; 32]).unwrap();
         assert_eq!(
             out,
             Extension(
@@ -999,7 +1011,7 @@ mod tests {
     #[test]
     fn insert_leaf_into_leaf_root_no_common_bytes_in_key() {
         let mut root = Leaf(NibbleKey::new(vec![1u8; 32]), vec![1u8; 32]);
-        let out = insert_leaf(&mut root, vec![2u8; 32], vec![1u8; 32]).unwrap();
+        let out = insert_leaf(&mut root, &NibbleKey::from(vec![2u8; 32]), vec![1u8; 32]).unwrap();
         assert_eq!(
             out,
             FullNode(vec![
@@ -1027,7 +1039,7 @@ mod tests {
     fn insert_leaf_into_empty_root() {
         let children = vec![EmptySlot; 16];
         let mut root = FullNode(children);
-        let out = insert_leaf(&mut root, vec![0u8; 32], vec![1u8; 32]);
+        let out = insert_leaf(&mut root, &NibbleKey::from(vec![0u8; 32]), vec![1u8; 32]);
         assert_eq!(
             out.unwrap(),
             FullNode(vec![
@@ -1071,7 +1083,7 @@ mod tests {
             EmptySlot,
             EmptySlot,
         ]);
-        let out = insert_leaf(&mut root, vec![0u8; 32], vec![1u8; 32]);
+        let out = insert_leaf(&mut root, &NibbleKey::from(vec![0u8; 32]), vec![1u8; 32]);
         assert_eq!(
             out.unwrap(),
             FullNode(vec![
@@ -1333,7 +1345,12 @@ mod tests {
     #[test]
     fn roundtrip() {
         let mut tree_root = Node::FullNode(vec![Node::EmptySlot; 16]);
-        let new_root = insert_leaf(&mut tree_root, vec![1u8; 32], vec![2u8; 32]).unwrap();
+        let new_root = insert_leaf(
+            &mut tree_root,
+            &NibbleKey::from(vec![1u8; 32]),
+            vec![2u8; 32],
+        )
+        .unwrap();
 
         assert_eq!(
             new_root.hash(),
