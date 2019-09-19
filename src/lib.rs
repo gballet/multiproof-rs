@@ -201,6 +201,24 @@ impl rlp::Decodable for Multiproof {
     }
 }
 
+impl std::fmt::Display for Multiproof {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "instructions:\n")?;
+        for i in self.instructions.iter() {
+            write!(f, "\t{:?}\n", i)?;
+        }
+        write!(f, "keyvals:\n")?;
+        for kv in self.keyvals.iter() {
+            write!(f, "\t{:?}\n", hex::encode(kv))?;
+        }
+        write!(f, "hashes:\n");
+        for h in self.hashes.iter() {
+            write!(f, "\t{}\n", hex::encode(h))?;
+        }
+        Ok(())
+    }
+}
+
 // Rebuilds the tree based on the multiproof components
 pub fn rebuild(proof: &Multiproof) -> Result<Node, String> {
     use Instruction::*;
