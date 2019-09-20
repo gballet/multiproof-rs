@@ -10,7 +10,7 @@ use utils::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node {
-    Hash(Vec<u8>, usize), // (Hash, # empty spaces)
+    Hash(Vec<u8>),
     Leaf(NibbleKey, Vec<u8>),
     Extension(NibbleKey, Box<Node>),
     FullNode(Vec<Node>),
@@ -111,7 +111,7 @@ impl Node {
                     encoding
                 }
             }
-            Hash(h, _) => h.to_vec(),
+            Hash(h) => h.to_vec(),
         }
     }
 }
@@ -125,7 +125,7 @@ const ADD_OPCODE: usize = 4;
 #[derive(Debug, PartialEq)]
 pub enum Instruction {
     BRANCH(usize),
-    HASHER(usize),
+    HASHER,
     LEAF(usize),
     EXTENSION(Vec<u8>),
     ADD(usize),
@@ -138,7 +138,7 @@ impl rlp::Encodable for Instruction {
                 s.begin_list(2).append(&EXTENSION_OPCODE).append_list(ext)
             }
             Instruction::BRANCH(size) => s.begin_list(2).append(&BRANCH_OPCODE).append(size),
-            Instruction::HASHER(size) => s.begin_list(2).append(&HASHER_OPCODE).append(size),
+            Instruction::HASHER => s.begin_list(1).append(&HASHER_OPCODE),
             Instruction::LEAF(size) => s.begin_list(2).append(&LEAF_OPCODE).append(size),
             Instruction::ADD(index) => s.begin_list(2).append(&ADD_OPCODE).append(index),
         };
@@ -154,21 +154,21 @@ impl rlp::Decodable for Instruction {
             return Err(rlp::DecoderError::Custom("Invalid instruction opcode {}"));
         }
 
-        if instr != EXTENSION_OPCODE {
+        if instr == EXTENSION_OPCODE {
+            Ok(Instruction::EXTENSION(rlp.at(1)?.as_list()?))
+        } else if instr == HASHER_OPCODE {
+            Ok(Instruction::HASHER)
+        } else {
             let size: usize = rlp.at(1usize)?.as_val()?;
             let i = match instr {
                 BRANCH_OPCODE => Instruction::BRANCH(size),
-                HASHER_OPCODE => Instruction::HASHER(size),
                 LEAF_OPCODE => Instruction::LEAF(size),
                 ADD_OPCODE => Instruction::ADD(size),
                 _ => panic!("This should never happen!"), /* Famous last words */
             };
 
-            return Ok(i);
+            Ok(i)
         }
-
-        let ext = rlp.at(1usize)?.as_list()?;
-        Ok(Instruction::EXTENSION(ext))
     }
 }
 
@@ -235,11 +235,11 @@ pub fn rebuild(proof: &Multiproof) -> Result<Node, String> {
 
     for instr in iiter {
         match instr {
-            HASHER(digit) => {
+            HASHER => {
                 if let Some(h) = hiter.next() {
-                    stack.push(Hash(h.to_vec(), *digit));
+                    stack.push(Hash(h.to_vec()));
                 } else {
-                    return Err(format!("Proof requires one more hash in HASHER({})", digit));
+                    return Err(format!("Proof requires one more hash in HASHER"));
                 }
             }
             LEAF(keylength) => {
@@ -293,7 +293,7 @@ pub fn rebuild(proof: &Multiproof) -> Result<Node, String> {
                             // a child (el1) of the parent node (el2). this is done during resolve.
                             n2[*digit] = el1;
                         }
-                        Hash(_, _) => {
+                        Hash(_) => {
                             return Err(String::from("Hash node no longer supported in this case"))
                         }
                         _ => return Err(String::from("Unexpected node type")),
@@ -446,7 +446,7 @@ pub fn make_multiproof(root: &Node, keys: Vec<NibbleKey>) -> Result<Multiproof, 
     // node.
     if keys.len() == 0 {
         return Ok(Multiproof {
-            instructions: vec![Instruction::HASHER(0)],
+            instructions: vec![Instruction::HASHER],
             hashes: vec![root.hash()],
             keyvals: vec![],
         });
@@ -478,7 +478,7 @@ pub fn make_multiproof(root: &Node, keys: Vec<NibbleKey>) -> Result<Multiproof, 
                 if dispatch[selector].len() == 0 {
                     // Empty slots are not to be hashed
                     if vec[selector] != EmptySlot {
-                        instructions.push(Instruction::HASHER(0));
+                        instructions.push(Instruction::HASHER);
                         if branch {
                             instructions.push(Instruction::BRANCH(selector));
                             branch = false;
@@ -545,7 +545,7 @@ pub fn make_multiproof(root: &Node, keys: Vec<NibbleKey>) -> Result<Multiproof, 
             values.append(&mut proof.keyvals);
             instructions.push(Instruction::EXTENSION(extkey.clone().into()));
         }
-        Hash(_, _) => return Err("Should not have encountered a Hash in this context".to_string()),
+        Hash(_) => return Err("Should not have encountered a Hash in this context".to_string()),
     }
 
     Ok(Multiproof {
@@ -597,13 +597,10 @@ mod tests {
                 EmptySlot,
                 EmptySlot,
                 EmptySlot,
-                Hash(
-                    vec![
-                        14, 142, 96, 165, 156, 5, 72, 38, 156, 85, 14, 69, 181, 246, 113, 175, 254,
-                        205, 123, 70, 93, 101, 33, 244, 149, 177, 98, 113, 75, 151, 252, 227
-                    ],
-                    0
-                ),
+                Hash(vec![
+                    14, 142, 96, 165, 156, 5, 72, 38, 156, 85, 14, 69, 181, 246, 113, 175, 254,
+                    205, 123, 70, 93, 101, 33, 244, 149, 177, 98, 113, 75, 151, 252, 227
+                ]),
                 EmptySlot,
                 EmptySlot,
                 EmptySlot,
@@ -688,10 +685,7 @@ mod tests {
             BRANCH(n) => assert_eq!(n, 1),
             _ => panic!(format!("Invalid instruction {:?}", i[1])),
         }
-        match i[2] {
-            HASHER(n) => assert_eq!(n, 0),
-            _ => panic!(format!("Invalid instruction {:?}", i[2])),
-        }
+        assert_eq!(i[2], HASHER);
         match i[3] {
             ADD(n) => assert_eq!(n, 2),
             _ => panic!(format!("Invalid instruction {:?}", i[3])),
