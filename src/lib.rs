@@ -13,7 +13,7 @@ pub enum Node {
     Hash(Vec<u8>),
     Leaf(NibbleKey, Vec<u8>),
     Extension(NibbleKey, Box<Node>),
-    FullNode(Vec<Node>),
+    Branch(Vec<Node>),
     EmptySlot,
 }
 
@@ -31,7 +31,7 @@ impl rlp::Encodable for Node {
                     extension_branch_hash,
                 ]);
             }
-            Node::FullNode(ref vec) => {
+            Node::Branch(ref vec) => {
                 let mut child_refs = Vec::new();
                 for node in vec {
                     child_refs.push(node.hash());
@@ -91,7 +91,7 @@ impl Node {
                     encoding
                 }
             }
-            FullNode(ref nodes) => {
+            Branch(ref nodes) => {
                 let mut keys = Vec::new();
                 for node in nodes {
                     keys.push(node.hash());
@@ -259,7 +259,7 @@ pub fn rebuild(proof: &Multiproof) -> Result<Node, String> {
                 if let Some(node) = stack.pop() {
                     let mut children = vec![Node::EmptySlot; 16];
                     children[*digit] = node;
-                    stack.push(FullNode(children))
+                    stack.push(Branch(children))
                 } else {
                     return Err(format!(
                         "Could not pop a value from the stack, that is required for a BRANCH({})",
@@ -280,7 +280,7 @@ pub fn rebuild(proof: &Multiproof) -> Result<Node, String> {
             ADD(digit) => {
                 if let (Some(el1), Some(el2)) = (stack.pop(), stack.last_mut()) {
                     match el2 {
-                        FullNode(ref mut n2) => {
+                        Branch(ref mut n2) => {
                             if *digit >= n2.len() {
                                 return Err(format!(
                                     "Incorrect full node index: {} > {}",
@@ -344,11 +344,11 @@ pub fn insert_leaf(root: &mut Node, key: &NibbleKey, value: Vec<u8>) -> Result<N
             // Put the common part into an extension node
             if firstdiffindex == 0 {
                 // Special case: no extension necessary
-                Ok(FullNode(res))
+                Ok(Branch(res))
             } else {
                 Ok(Extension(
                     NibbleKey::new(key[..firstdiffindex].to_vec()),
-                    Box::new(FullNode(res)),
+                    Box::new(Branch(res)),
                 ))
             }
         }
@@ -390,7 +390,7 @@ pub fn insert_leaf(root: &mut Node, key: &NibbleKey, value: Vec<u8>) -> Result<N
                 // an empty slice `[]`.
                 res[key[0] as usize] = Leaf(NibbleKey::new(key[1..].to_vec()), value);
 
-                return Ok(FullNode(res));
+                return Ok(Branch(res));
             }
 
             // Create the new root, which is a full node.
@@ -413,10 +413,10 @@ pub fn insert_leaf(root: &mut Node, key: &NibbleKey, value: Vec<u8>) -> Result<N
             // Put the common part into an extension node
             Ok(Extension(
                 NibbleKey::new(extkey[..firstdiffindex].to_vec()),
-                Box::new(FullNode(res)),
+                Box::new(Branch(res)),
             ))
         }
-        FullNode(ref mut vec) => {
+        Branch(ref mut vec) => {
             let idx = key[0] as usize;
             // If the slot isn't yet in use, fill it, and otherwise,
             // recurse into the child node.
@@ -427,7 +427,7 @@ pub fn insert_leaf(root: &mut Node, key: &NibbleKey, value: Vec<u8>) -> Result<N
                 insert_leaf(&mut vec[idx], &NibbleKey::from(key[1..].to_vec()), value)?
             };
             // Return the root node with an updated entry
-            Ok(FullNode(vec.to_vec()))
+            Ok(Branch(vec.to_vec()))
         }
         _ => panic!("Not supported yet"),
     }
@@ -455,7 +455,7 @@ pub fn make_multiproof(root: &Node, keys: Vec<NibbleKey>) -> Result<Multiproof, 
     // Recurse into each node, follow the trace
     match root {
         EmptySlot => return Err("Cannot build a multiproof on an empty slot".to_string()),
-        FullNode(ref vec) => {
+        Branch(ref vec) => {
             // Split the current keys based on their first nibble, in order
             // to dispatch each key to the proper sublevel.
             let mut dispatch = vec![Vec::new(); 16];
@@ -567,7 +567,7 @@ mod tests {
 
     #[test]
     fn validate_tree() {
-        let mut root = FullNode(vec![EmptySlot; 16]);
+        let mut root = Branch(vec![EmptySlot; 16]);
         insert_leaf(&mut root, &NibbleKey::from(vec![2u8; 32]), vec![0u8; 32]).unwrap();
         insert_leaf(&mut root, &NibbleKey::from(vec![1u8; 32]), vec![1u8; 32]).unwrap();
         insert_leaf(&mut root, &NibbleKey::from(vec![8u8; 32]), vec![150u8; 32]).unwrap();
@@ -588,7 +588,7 @@ mod tests {
 
         assert_eq!(
             new_root,
-            FullNode(vec![
+            Branch(vec![
                 EmptySlot,
                 Leaf(NibbleKey::new(vec![1u8; 31]), vec![1u8; 32]),
                 Leaf(NibbleKey::new(vec![2u8; 31]), vec![0u8; 32]),
@@ -614,7 +614,7 @@ mod tests {
 
     #[test]
     fn make_multiproof_two_values() {
-        let mut root = FullNode(vec![EmptySlot; 16]);
+        let mut root = Branch(vec![EmptySlot; 16]);
         insert_leaf(&mut root, &NibbleKey::from(vec![2u8; 32]), vec![0u8; 32]).unwrap();
         insert_leaf(&mut root, &NibbleKey::from(vec![1u8; 32]), vec![1u8; 32]).unwrap();
         insert_leaf(&mut root, &NibbleKey::from(vec![8u8; 32]), vec![150u8; 32]).unwrap();
@@ -667,7 +667,7 @@ mod tests {
 
     #[test]
     fn make_multiproof_single_value() {
-        let mut root = FullNode(vec![EmptySlot; 16]);
+        let mut root = Branch(vec![EmptySlot; 16]);
         insert_leaf(&mut root, &NibbleKey::from(vec![2u8; 32]), vec![0u8; 32]).unwrap();
         insert_leaf(&mut root, &NibbleKey::from(vec![1u8; 32]), vec![1u8; 32]).unwrap();
 
@@ -700,7 +700,7 @@ mod tests {
 
     #[test]
     fn make_multiproof_no_values() {
-        let mut root = FullNode(vec![EmptySlot; 16]);
+        let mut root = Branch(vec![EmptySlot; 16]);
         insert_leaf(&mut root, &NibbleKey::from(vec![2u8; 32]), vec![0u8; 32]).unwrap();
         insert_leaf(&mut root, &NibbleKey::from(vec![1u8; 32]), vec![1u8; 32]).unwrap();
 
@@ -715,7 +715,7 @@ mod tests {
 
     #[test]
     fn make_multiproof_empty_tree() {
-        let root = FullNode(vec![EmptySlot; 16]);
+        let root = Branch(vec![EmptySlot; 16]);
 
         let out = make_multiproof(&root, vec![NibbleKey::from(vec![1u8; 32])]);
         assert!(out.is_err());
@@ -723,7 +723,7 @@ mod tests {
 
     #[test]
     fn make_multiproof_hash_before_nested_nodes_in_branch() {
-        let mut root = FullNode(vec![EmptySlot; 16]);
+        let mut root = Branch(vec![EmptySlot; 16]);
         insert_leaf(&mut root, &NibbleKey::from(vec![1u8; 32]), vec![0u8; 32]).unwrap();
         insert_leaf(&mut root, &NibbleKey::from(vec![2u8; 32]), vec![0u8; 32]).unwrap();
 
@@ -774,7 +774,7 @@ mod tests {
         let v: serde_json::Value = serde_json::from_str(data).unwrap();
         let v_obj = v.as_object().unwrap();
 
-        let mut root = FullNode(vec![EmptySlot; 16]);
+        let mut root = Branch(vec![EmptySlot; 16]);
 
         // the accounts are all the same, this is the serialized value
         let account_leaf_val = hex::decode("f8478083ffffffa056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a0c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap();
@@ -820,7 +820,7 @@ mod tests {
     fn insert_leaf_zero_length_key_after_fullnode() {
         let mut root = Extension(
             NibbleKey::new(vec![0u8; 31]),
-            Box::new(FullNode(vec![
+            Box::new(Branch(vec![
                 EmptySlot,
                 Leaf(NibbleKey::new(vec![]), vec![0u8; 32]),
                 EmptySlot,
@@ -844,7 +844,7 @@ mod tests {
             out,
             Extension(
                 NibbleKey::new(vec![0u8; 31]),
-                Box::new(FullNode(vec![
+                Box::new(Branch(vec![
                     Leaf(NibbleKey::new(vec![]), vec![1u8; 32]),
                     Leaf(NibbleKey::new(vec![]), vec![0u8; 32]),
                     EmptySlot,
@@ -882,7 +882,7 @@ mod tests {
             out,
             Extension(
                 NibbleKey::new(vec![0xd, 0xe, 0xa, 0xd]),
-                Box::new(FullNode(vec![
+                Box::new(Branch(vec![
                     Leaf(NibbleKey::new(vec![0u8; 27]), vec![1u8; 32]),
                     Leaf(NibbleKey::new(vec![1u8; 27]), vec![2u8; 32]),
                     EmptySlot,
@@ -913,7 +913,7 @@ mod tests {
         let out = insert_leaf(&mut root, &NibbleKey::from(vec![2u8; 32]), vec![1u8; 32]).unwrap();
         assert_eq!(
             out,
-            FullNode(vec![
+            Branch(vec![
                 EmptySlot,
                 EmptySlot,
                 Leaf(NibbleKey::new(vec![2u8; 31]), vec![1u8; 32]),
@@ -951,7 +951,7 @@ mod tests {
             out,
             Extension(
                 NibbleKey::new(vec![0xd, 0xe]),
-                Box::new(FullNode(vec![
+                Box::new(Branch(vec![
                     Leaf(NibbleKey::new(vec![0u8; 29]), vec![1u8; 32]),
                     EmptySlot,
                     EmptySlot,
@@ -991,7 +991,7 @@ mod tests {
             out,
             Extension(
                 NibbleKey::new(vec![0xd, 0xe, 0xa]),
-                Box::new(FullNode(vec![
+                Box::new(Branch(vec![
                     Leaf(NibbleKey::new(vec![0u8; 28]), vec![1u8; 32]),
                     EmptySlot,
                     EmptySlot,
@@ -1028,7 +1028,7 @@ mod tests {
             out,
             Extension(
                 NibbleKey::new(vec![2u8; 16]),
-                Box::new(FullNode(vec![
+                Box::new(Branch(vec![
                     Leaf(NibbleKey::new(vec![0u8; 15]), vec![1u8; 32]),
                     EmptySlot,
                     Leaf(NibbleKey::new(vec![2u8; 15]), vec![1u8; 32]),
@@ -1056,7 +1056,7 @@ mod tests {
         let out = insert_leaf(&mut root, &NibbleKey::from(vec![2u8; 32]), vec![1u8; 32]).unwrap();
         assert_eq!(
             out,
-            FullNode(vec![
+            Branch(vec![
                 EmptySlot,
                 Leaf(NibbleKey::new(vec![1u8; 31]), vec![1u8; 32]),
                 Leaf(NibbleKey::new(vec![2u8; 31]), vec![1u8; 32]),
@@ -1080,11 +1080,11 @@ mod tests {
     #[test]
     fn insert_leaf_into_empty_root() {
         let children = vec![EmptySlot; 16];
-        let mut root = FullNode(children);
+        let mut root = Branch(children);
         let out = insert_leaf(&mut root, &NibbleKey::from(vec![0u8; 32]), vec![1u8; 32]);
         assert_eq!(
             out.unwrap(),
-            FullNode(vec![
+            Branch(vec![
                 Leaf(NibbleKey::new(vec![0u8; 31]), vec![1u8; 32]),
                 EmptySlot,
                 EmptySlot,
@@ -1107,8 +1107,8 @@ mod tests {
 
     #[test]
     fn insert_leaf_into_two_level_fullnodes() {
-        let mut root = FullNode(vec![
-            FullNode(vec![EmptySlot; 16]),
+        let mut root = Branch(vec![
+            Branch(vec![EmptySlot; 16]),
             EmptySlot,
             EmptySlot,
             EmptySlot,
@@ -1128,8 +1128,8 @@ mod tests {
         let out = insert_leaf(&mut root, &NibbleKey::from(vec![0u8; 32]), vec![1u8; 32]);
         assert_eq!(
             out.unwrap(),
-            FullNode(vec![
-                FullNode(vec![
+            Branch(vec![
+                Branch(vec![
                     Leaf(NibbleKey::new(vec![0u8; 30]), vec![1u8; 32]),
                     EmptySlot,
                     EmptySlot,
@@ -1175,11 +1175,11 @@ mod tests {
             ["0x2222222222222222222222222222222222222222", "0xeeee"],
         ];
 
-        let mut root = FullNode(vec![EmptySlot; 16]);
+        let mut root = Branch(vec![EmptySlot; 16]);
         for i in &inputs {
             let k = NibbleKey::from(utils::ByteKey(hex_string_to_vec(i[0])));
             let v = hex_string_to_vec(i[1]);
-            insert_leaf(&mut root, k.into(), v);
+            insert_leaf(&mut root, &k, v).unwrap();
         }
 
         let root_hash = root.hash();
@@ -1213,7 +1213,7 @@ mod tests {
         let out = rebuild(&proof).unwrap();
         assert_eq!(
             out,
-            FullNode(vec![
+            Branch(vec![
                 Leaf(NibbleKey::new(vec![]), vec![4, 5, 6]),
                 EmptySlot,
                 EmptySlot,
@@ -1247,7 +1247,7 @@ mod tests {
         let out = rebuild(&proof).unwrap();
         assert_eq!(
             out,
-            FullNode(vec![
+            Branch(vec![
                 Leaf(NibbleKey::new(vec![]), vec![4, 5, 6]),
                 EmptySlot,
                 Leaf(NibbleKey::new(vec![9]), vec![10, 11, 12]),
@@ -1289,7 +1289,7 @@ mod tests {
             out,
             Extension(
                 NibbleKey::new(vec![13, 14, 15]),
-                Box::new(FullNode(vec![
+                Box::new(Branch(vec![
                     Leaf(NibbleKey::new(vec![]), vec![4, 5, 6]),
                     EmptySlot,
                     Leaf(NibbleKey::new(vec![9]), vec![10, 11, 12]),
@@ -1350,7 +1350,7 @@ mod tests {
     #[test]
     fn full_node_hash() {
         assert_eq!(
-            FullNode(vec![
+            Branch(vec![
                 Leaf(NibbleKey::new(vec![]), vec![4, 5, 6]),
                 EmptySlot,
                 Leaf(NibbleKey::new(vec![9]), vec![10, 11, 12]),
@@ -1406,7 +1406,7 @@ mod tests {
 
     #[test]
     fn roundtrip() {
-        let mut tree_root = Node::FullNode(vec![Node::EmptySlot; 16]);
+        let mut tree_root = Node::Branch(vec![Node::EmptySlot; 16]);
         let new_root = insert_leaf(
             &mut tree_root,
             &NibbleKey::from(vec![1u8; 32]),
