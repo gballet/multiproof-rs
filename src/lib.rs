@@ -92,15 +92,20 @@ impl Node {
                 }
             }
             Branch(ref nodes) => {
-                let mut keys = Vec::new();
+                let mut stream = rlp::RlpStream::new();
+                stream.begin_unbounded_list();
                 for node in nodes {
-                    keys.push(node.hash());
+                    let hash = node.hash();
+                    if hash.len() < 32 && hash.len() > 0 {
+                        stream.append_raw(&hash, hash.len());
+                    } else {
+                        stream.append(&hash);
+                    }
                 }
-                if keys.len() == 16 {
-                    // add 17th element to branch node
-                    keys.push(Vec::new());
-                }
-                let encoding = rlp::encode_list::<Vec<u8>, Vec<u8>>(&keys[..]);
+                // 17th element
+                stream.append(&"");
+                stream.complete_unbounded_list();
+                let encoding = stream.out();
 
                 // Only hash if the encoder output is more than 32 bytes.
                 if encoding.len() > 32 {
@@ -1348,7 +1353,7 @@ mod tests {
     }
 
     #[test]
-    fn full_node_hash() {
+    fn branch_hash() {
         assert_eq!(
             Branch(vec![
                 Leaf(NibbleKey::new(vec![]), vec![4, 5, 6]),
@@ -1370,8 +1375,8 @@ mod tests {
             ])
             .hash(),
             vec![
-                221, 134, 197, 32, 131, 4, 5, 6, 128, 134, 197, 57, 131, 10, 11, 12, 128, 128, 128,
-                128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128
+                219, 197, 32, 131, 4, 5, 6, 128, 197, 57, 131, 10, 11, 12, 128, 128, 128, 128, 128,
+                128, 128, 128, 128, 128, 128, 128, 128, 128
             ]
         );
     }
