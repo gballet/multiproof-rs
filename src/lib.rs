@@ -10,7 +10,7 @@ use utils::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node {
-    Hash(Vec<u8>),
+    Hash(Vec<u8>, usize), // (Hash, # empty spaces)
     Leaf(NibbleKey, Vec<u8>),
     Extension(NibbleKey, Box<Node>),
     Branch(Vec<Node>),
@@ -31,17 +31,22 @@ impl rlp::Encodable for Node {
                     extension_branch_hash,
                 ]);
             }
-            Node::Branch(ref vec) => {
-                let mut child_refs = Vec::new();
-                for node in vec {
-                    child_refs.push(node.hash());
+            Node::Branch(ref nodes) => {
+                let mut stream = rlp::RlpStream::new();
+                stream.begin_unbounded_list();
+                for node in nodes {
+                    let hash = node.hash();
+                    if hash.len() < 32 && hash.len() > 0 {
+                        stream.append_raw(&hash, hash.len());
+                    } else {
+                        stream.append(&hash);
+                    }
                 }
-                if child_refs.len() == 16 {
-                    // add 17th element to branch node
-                    child_refs.push(Vec::new());
-                }
-                let encoding = rlp::encode_list::<Vec<u8>, Vec<u8>>(&child_refs[..]);
-                s.append(&encoding);
+                // 17th element
+                stream.append(&"");
+                stream.complete_unbounded_list();
+                let encoding = stream.out();
+                s.append_raw(&encoding, encoding.len());
             }
             _ => panic!("Not supported yet!"),
         }
@@ -66,57 +71,19 @@ impl Node {
         use Node::*;
         match self {
             EmptySlot => Vec::new(),
-            Leaf(_, _) => {
-                let encoding = rlp::encode(self);
-
-                // Only hash if the encoder output is more than 32 bytes.
-                if encoding.len() > 32 {
-                    let mut hasher = Keccak256::new();
-                    hasher.input(&encoding);
-                    Vec::<u8>::from(&hasher.result()[..])
-                } else {
-                    encoding
-                }
-            }
-            Extension(ref ext, node) => {
-                let subtree_hash = node.hash();
-                let encoding = rlp::encode(self);
-
-                // Only hash if the encoder output is more than 32 bytes.
-                if encoding.len() > 32 {
-                    let mut hasher = Keccak256::new();
-                    hasher.input(&encoding);
-                    Vec::<u8>::from(&hasher.result()[..])
-                } else {
-                    encoding
-                }
-            }
-            Branch(ref nodes) => {
-                let mut stream = rlp::RlpStream::new();
-                stream.begin_unbounded_list();
-                for node in nodes {
-                    let hash = node.hash();
-                    if hash.len() < 32 && hash.len() > 0 {
-                        stream.append_raw(&hash, hash.len());
-                    } else {
-                        stream.append(&hash);
-                    }
-                }
-                // 17th element
-                stream.append(&"");
-                stream.complete_unbounded_list();
-                let encoding = stream.out();
-
-                // Only hash if the encoder output is more than 32 bytes.
-                if encoding.len() > 32 {
-                    let mut hasher = Keccak256::new();
-                    hasher.input(&encoding);
-                    Vec::<u8>::from(&hasher.result()[..])
-                } else {
-                    encoding
-                }
-            }
             Hash(h) => h.to_vec(),
+            _ => {
+                let encoding = rlp::encode(self);
+
+                // Only hash if the encoder output is more than 32 bytes.
+                if encoding.len() >= 32 {
+                    let mut hasher = Keccak256::new();
+                    hasher.input(&encoding);
+                    Vec::<u8>::from(&hasher.result()[..])
+                } else {
+                    encoding
+                }
+            }
         }
     }
 }
@@ -167,6 +134,7 @@ impl rlp::Decodable for Instruction {
             let size: usize = rlp.at(1usize)?.as_val()?;
             let i = match instr {
                 BRANCH_OPCODE => Instruction::BRANCH(size),
+                HASHER_OPCODE => Instruction::HASHER(size),
                 LEAF_OPCODE => Instruction::LEAF(size),
                 ADD_OPCODE => Instruction::ADD(size),
                 _ => panic!("This should never happen!"), /* Famous last words */
