@@ -10,7 +10,7 @@ use utils::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node {
-    Hash(Vec<u8>, usize), // (Hash, # empty spaces)
+    Hash(Vec<u8>), // (Hash, # empty spaces)
     Leaf(NibbleKey, Vec<u8>),
     Extension(NibbleKey, Box<Node>),
     Branch(Vec<Node>),
@@ -134,7 +134,7 @@ impl rlp::Decodable for Instruction {
             let size: usize = rlp.at(1usize)?.as_val()?;
             let i = match instr {
                 BRANCH_OPCODE => Instruction::BRANCH(size),
-                HASHER_OPCODE => Instruction::HASHER(size),
+                HASHER_OPCODE => Instruction::HASHER,
                 LEAF_OPCODE => Instruction::LEAF(size),
                 ADD_OPCODE => Instruction::ADD(size),
                 _ => panic!("This should never happen!"), /* Famous last words */
@@ -184,7 +184,7 @@ impl std::fmt::Display for Multiproof {
         for kv in self.keyvals.iter() {
             write!(f, "\t{:?}\n", hex::encode(kv))?;
         }
-        write!(f, "hashes:\n");
+        write!(f, "hashes:\n")?;
         for h in self.hashes.iter() {
             write!(f, "\t{}\n", hex::encode(h))?;
         }
@@ -719,10 +719,10 @@ mod tests {
 
         let nibble_from_hex = |h| NibbleKey::from(utils::ByteKey(hex::decode(h).unwrap()));
 
-        let mut root = FullNode(vec![EmptySlot; 16]);
+        let mut root = Branch(vec![EmptySlot; 16]);
         for i in &inputs {
             let k = nibble_from_hex(&i.0[2..]);
-            insert_leaf(&mut root, &k, i.1.clone());
+            insert_leaf(&mut root, &k, i.1.clone()).unwrap();
         }
 
         let pre_root_hash = root.hash();
@@ -748,9 +748,6 @@ mod tests {
         let v_obj = v.as_object().unwrap();
 
         let mut root = Branch(vec![EmptySlot; 16]);
-
-        // the accounts are all the same, this is the serialized value
-        let account_leaf_val = hex::decode("f8478083ffffffa056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a0c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap();
 
         v_obj.keys().for_each(|key| {
             let address_bytes = hex::decode(&key[2..]).unwrap();
