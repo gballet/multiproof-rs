@@ -1537,4 +1537,45 @@ mod tests {
         let rebuilt_root = rebuild(&proof).unwrap();
         assert_eq!(new_root, rebuilt_root);
     }
+
+    fn hex_string_to_vec(s: &str) -> Vec<u8> {
+        // Assumes `0x` prefix
+        (2..s.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn check_branch_less_than_32_bytes() {
+        let mut root = Node::default();
+        root = insert_leaf(&mut root, &NibbleKey::from(vec![1u8; 4]), vec![1u8; 2]).unwrap();
+        root = insert_leaf(&mut root, &NibbleKey::from(vec![2u8; 4]), vec![1u8; 2]).unwrap();
+
+        assert_eq!(
+            root.hash(),
+            vec![
+                221, 128, 198, 130, 49, 17, 130, 1, 1, 198, 130, 50, 34, 130, 1, 1, 128, 128, 128,
+                128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128
+            ]
+        );
+    }
+
+    #[test]
+    fn check_extension_less_than_32_bytes() {
+        let mut second_key = vec![1u8; 2];
+        second_key.extend(vec![2u8; 2]);
+
+        let mut root = Node::default();
+        root = insert_leaf(&mut root, &NibbleKey::from(vec![1u8; 4]), vec![1u8; 2]).unwrap();
+        root = insert_leaf(&mut root, &NibbleKey::from(second_key), vec![1u8; 2]).unwrap();
+
+        assert_eq!(
+            root.hash(),
+            vec![
+                222, 130, 0, 17, 154, 217, 128, 196, 49, 130, 1, 1, 196, 50, 130, 1, 1, 128, 128,
+                128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128
+            ]
+        );
+    }
 }
