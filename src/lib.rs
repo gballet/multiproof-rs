@@ -1547,6 +1547,21 @@ mod tests {
     }
 
     #[test]
+    fn check_payload_length_exactly_32_bytes() {
+        let mut root = Node::default();
+
+        root = insert_leaf(&mut root, &NibbleKey::from(vec![1u8; 16]), vec![1u8; 20]).unwrap();
+        assert_eq!(root.hash().len(), 32);
+        assert_eq!(
+            root.hash(),
+            vec![
+                149, 160, 25, 137, 124, 149, 98, 15, 208, 235, 90, 71, 238, 186, 81, 6, 47, 67,
+                244, 224, 134, 155, 76, 154, 130, 70, 234, 61, 0, 11, 4, 135
+            ]
+        );
+    }
+
+    #[test]
     fn check_branch_less_than_32_bytes() {
         let mut root = Node::default();
         root = insert_leaf(&mut root, &NibbleKey::from(vec![1u8; 4]), vec![1u8; 2]).unwrap();
