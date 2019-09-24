@@ -17,6 +17,12 @@ pub enum Node {
     EmptySlot,
 }
 
+impl Default for Node {
+    fn default() -> Self {
+        Node::EmptySlot
+    }
+}
+
 impl rlp::Encodable for Node {
     fn rlp_append(&self, s: &mut rlp::RlpStream) {
         match self {
@@ -402,7 +408,8 @@ pub fn insert_leaf(root: &mut Node, key: &NibbleKey, value: Vec<u8>) -> Result<N
             // Return the root node with an updated entry
             Ok(Branch(vec.to_vec()))
         }
-        _ => panic!("Not supported yet"),
+        EmptySlot => Ok(Leaf(key.clone(), value)),
+        _ => panic!("Can not insert a node into a hashed node"),
     }
 }
 
@@ -1030,6 +1037,43 @@ mod tests {
                 EmptySlot,
                 Leaf(NibbleKey::new(vec![1u8; 31]), vec![1u8; 32]),
                 Leaf(NibbleKey::new(vec![2u8; 31]), vec![1u8; 32]),
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot
+            ])
+        );
+    }
+
+    #[test]
+    fn insert_leaf_into_emptyslot() {
+        let mut root = Node::default();
+        assert_eq!(root, EmptySlot);
+        let out = insert_leaf(&mut root, &NibbleKey::from(vec![0u8; 32]), vec![1u8; 32]).unwrap();
+        assert_eq!(out, Leaf(NibbleKey::new(vec![0u8; 32]), vec![1u8; 32]));
+    }
+
+    #[test]
+    fn insert_two_leaves_into_emptyslot() {
+        let mut root = Node::default();
+        assert_eq!(root, EmptySlot);
+        root = insert_leaf(&mut root, &NibbleKey::from(vec![0u8; 32]), vec![1u8; 32]).unwrap();
+        root = insert_leaf(&mut root, &NibbleKey::from(vec![1u8; 32]), vec![1u8; 32]).unwrap();
+        assert_eq!(
+            root,
+            Branch(vec![
+                Leaf(NibbleKey::new(vec![0u8; 31]), vec![1u8; 32]),
+                Leaf(NibbleKey::new(vec![1u8; 31]), vec![1u8; 32]),
+                EmptySlot,
                 EmptySlot,
                 EmptySlot,
                 EmptySlot,
