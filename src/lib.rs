@@ -73,6 +73,91 @@ impl rlp::Decodable for Node {
 }
 
 impl Node {
+    pub fn graphviz(&self) -> String {
+        let (nodes, refs) = self.graphviz_rec(NibbleKey::from(vec![]), String::from("root"));
+        format!(
+            "digraph D {{
+\tnode [shape=\"box\",label=\"hash\"];
+
+\t{}
+
+\t{}
+}}",
+            nodes.join("\n\t"),
+            refs.join("\n\t")
+        )
+    }
+
+    fn graphviz_key(key: NibbleKey) -> String {
+        let mut ret = String::new();
+        let nibbles: Vec<u8> = key.into();
+        for nibble in nibbles.iter() {
+            ret.push_str(&format!("<td>{}</td>", nibble));
+        }
+        ret
+    }
+
+    fn graphviz_rec(&self, prefix: NibbleKey, root: String) -> (Vec<String>, Vec<String>) {
+        let pref: Vec<u8> = prefix.clone().into();
+        match self {
+            Node::Leaf(ref k, ref v) => {
+                return (
+                    vec![
+                        format!("leaf{} [shape=none,margin=0,label=<<table border=\"0\" cellborder=\"1\" cellspacing=\"0\" cellpadding=\"4\"><tr>{}<td>{}</td></tr></table>>]", hex::encode(pref.clone()), Node::graphviz_key(k.clone()), hex::encode(v)),
+                    ],
+                    vec![format!("{} -> leaf{}", root, hex::encode(pref))],
+                );
+            }
+            Node::Branch(ref subnodes) => {
+                let name = format!("branch{}", hex::encode(pref.clone()));
+                let label = if prefix.len() > 0 {
+                    format!("{}", prefix[prefix.len() - 1])
+                } else {
+                    String::from("root")
+                };
+                println!("{:?}", hex::encode(pref.clone()));
+                let mut refs = if prefix.len() > 0 {
+                    vec![format!("{} -> {}", root, name)]
+                } else {
+                    Vec::new()
+                };
+                let mut nodes = vec![format!("{} [label=\"{}\"]", name, label)];
+                for (i, subnode) in subnodes.iter().enumerate() {
+                    let mut subkey: Vec<u8> = prefix.clone().into();
+                    subkey.push(i as u8);
+                    let (sn, sr) =
+                        Node::graphviz_rec(&subnode, NibbleKey::from(subkey), name.clone());
+                    nodes.extend(sn);
+                    refs.extend(sr);
+                }
+                return (nodes, refs);
+            }
+            Node::Extension(ref ext, ref subnode) => {
+                let name = format!("extension{}", hex::encode(pref.clone()));
+                let mut subkey: Vec<u8> = prefix.clone().into();
+                subkey.extend_from_slice(&ext[0..]);
+                let (sn, sr) = Node::graphviz_rec(subnode, NibbleKey::from(subkey), name.clone());
+                return (vec![name], vec![]);
+            }
+            Node::Hash(ref h) => {
+                let name = format!("hash{}", hex::encode(pref.clone()));
+                let label = if prefix.len() > 0 {
+                    String::from("hash")
+                } else {
+                    String::from("root")
+                };
+                return (
+                    vec![format!("{} [label=\"{}\"]", name, label)],
+                    vec![format!("{} -> {}", root, name)],
+                );
+            }
+            _ => {
+                /* Ignore EmptySlot */
+                (vec![], vec![])
+            }
+        }
+    }
+
     pub fn hash(&self) -> Vec<u8> {
         use Node::*;
         match self {
@@ -188,7 +273,7 @@ impl std::fmt::Display for Multiproof {
         }
         write!(f, "keyvals:\n")?;
         for kv in self.keyvals.iter() {
-            write!(f, "\t{}\n", hex::encode(kv))?;
+            write!(f, "\t{:?}\n", hex::encode(kv))?;
         }
         write!(f, "hashes:\n")?;
         for h in self.hashes.iter() {
@@ -248,7 +333,7 @@ pub fn rebuild(proof: &Multiproof) -> Result<Node, String> {
             }
             EXTENSION(key) => {
                 if let Some(node) = stack.pop() {
-                    stack.push(Extension(NibbleKey::from(key.to_vec()), Box::new(node)));
+                    stack.push(Extension(NibbleKey::new(key.to_vec()), Box::new(node)));
                 } else {
                     return Err(format!(
                         "Could not find a node on the stack, that is required for an EXTENSION({:?})",
