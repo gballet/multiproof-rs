@@ -1562,6 +1562,17 @@ mod tests {
     }
 
     #[test]
+    fn check_leaf_length_less_than_32_bytes() {
+        let mut root = Node::default();
+
+        root = insert_leaf(&mut root, &NibbleKey::from(vec![1u8; 2]), vec![1u8; 20]).unwrap();
+        assert_eq!(
+            root.hash(),
+            vec![216, 130, 32, 17, 148, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+        );
+    }
+
+    #[test]
     fn check_branch_less_than_32_bytes() {
         let mut root = Node::default();
         root = insert_leaf(&mut root, &NibbleKey::from(vec![1u8; 4]), vec![1u8; 2]).unwrap();
