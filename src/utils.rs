@@ -23,6 +23,11 @@ impl From<ByteKey> for NibbleKey {
 
 impl From<Vec<u8>> for NibbleKey {
     fn from(nibbles: Vec<u8>) -> Self {
+        for nibble in nibbles.iter() {
+            if *nibble >= 16 {
+                panic!("Nibble value is higher than 15");
+            }
+        }
         NibbleKey(nibbles)
     }
 }
@@ -34,15 +39,6 @@ impl From<&[u8]> for NibbleKey {
 }
 
 impl NibbleKey {
-    pub fn new(nibbles: Vec<u8>) -> Self {
-        for nibble in nibbles.iter() {
-            if *nibble >= 16 {
-                panic!("Nibble value is higher than 15");
-            }
-        }
-        NibbleKey(nibbles.clone())
-    }
-
     // Find the length of the common prefix of two keys
     pub fn factor_length(&self, other: &Self) -> usize {
         let (ref longuest, ref shortest) = if self.0.len() > other.0.len() {

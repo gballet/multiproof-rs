@@ -188,7 +188,7 @@ impl std::fmt::Display for Multiproof {
         }
         write!(f, "keyvals:\n")?;
         for kv in self.keyvals.iter() {
-            write!(f, "\t{:?}\n", hex::encode(kv))?;
+            write!(f, "\t{}\n", hex::encode(kv))?;
         }
         write!(f, "hashes:\n")?;
         for h in self.hashes.iter() {
@@ -224,7 +224,7 @@ pub fn rebuild(proof: &Multiproof) -> Result<Node, String> {
             LEAF(keylength) => {
                 if let Some(Leaf(key, value)) = kviter.next() {
                     stack.push(Leaf(
-                        NibbleKey::new(key[key.len() - *keylength..].to_vec()),
+                        NibbleKey::from(key[key.len() - *keylength..].to_vec()),
                         value.to_vec(),
                     ));
                 } else {
@@ -248,7 +248,7 @@ pub fn rebuild(proof: &Multiproof) -> Result<Node, String> {
             }
             EXTENSION(key) => {
                 if let Some(node) = stack.pop() {
-                    stack.push(Extension(NibbleKey::new(key.to_vec()), Box::new(node)));
+                    stack.push(Extension(NibbleKey::from(key.to_vec()), Box::new(node)));
                 } else {
                     return Err(format!(
                         "Could not find a node on the stack, that is required for an EXTENSION({:?})",
@@ -314,19 +314,19 @@ pub fn insert_leaf(root: &mut Node, key: &NibbleKey, value: Vec<u8>) -> Result<N
             // Add the initial leaf, with a key truncated by the common
             // key part.
             res[leafkey[firstdiffindex] as usize] = Leaf(
-                NibbleKey::new(leafkey[firstdiffindex + 1..].to_vec()),
+                NibbleKey::from(leafkey[firstdiffindex + 1..].to_vec()),
                 leafvalue.to_vec(),
             );
             // Add the node to be inserted
             res[key[firstdiffindex] as usize] =
-                Leaf(NibbleKey::new(key[firstdiffindex + 1..].to_vec()), value);
+                Leaf(NibbleKey::from(key[firstdiffindex + 1..].to_vec()), value);
             // Put the common part into an extension node
             if firstdiffindex == 0 {
                 // Special case: no extension necessary
                 Ok(Branch(res))
             } else {
                 Ok(Extension(
-                    NibbleKey::new(key[..firstdiffindex].to_vec()),
+                    NibbleKey::from(key[..firstdiffindex].to_vec()),
                     Box::new(Branch(res)),
                 ))
             }
@@ -358,7 +358,7 @@ pub fn insert_leaf(root: &mut Node, key: &NibbleKey, value: Vec<u8>) -> Result<N
                     child.clone()
                 } else {
                     Extension(
-                        NibbleKey::new(extkey[1..].to_vec()),
+                        NibbleKey::from(extkey[1..].to_vec()),
                         Box::new(child.clone()),
                     )
                 };
@@ -367,7 +367,7 @@ pub fn insert_leaf(root: &mut Node, key: &NibbleKey, value: Vec<u8>) -> Result<N
                 // difference of one byte, that byte will be consumed by
                 // the fullnode and therefore the key in the leaf will be
                 // an empty slice `[]`.
-                res[key[0] as usize] = Leaf(NibbleKey::new(key[1..].to_vec()), value);
+                res[key[0] as usize] = Leaf(NibbleKey::from(key[1..].to_vec()), value);
 
                 return Ok(Branch(res));
             }
@@ -380,7 +380,7 @@ pub fn insert_leaf(root: &mut Node, key: &NibbleKey, value: Vec<u8>) -> Result<N
             // of an extension node past the full node.
             res[extkey[firstdiffindex] as usize] = if extkey.len() - firstdiffindex > 1 {
                 Extension(
-                    NibbleKey::new(extkey[firstdiffindex + 1..].to_vec()),
+                    NibbleKey::from(extkey[firstdiffindex + 1..].to_vec()),
                     Box::new(child.clone()),
                 )
             } else {
@@ -388,10 +388,10 @@ pub fn insert_leaf(root: &mut Node, key: &NibbleKey, value: Vec<u8>) -> Result<N
             };
             // Add the node to be inserted
             res[key[firstdiffindex] as usize] =
-                Leaf(NibbleKey::new(key[firstdiffindex + 1..].to_vec()), value);
+                Leaf(NibbleKey::from(key[firstdiffindex + 1..].to_vec()), value);
             // Put the common part into an extension node
             Ok(Extension(
-                NibbleKey::new(extkey[..firstdiffindex].to_vec()),
+                NibbleKey::from(extkey[..firstdiffindex].to_vec()),
                 Box::new(Branch(res)),
             ))
         }
@@ -401,7 +401,7 @@ pub fn insert_leaf(root: &mut Node, key: &NibbleKey, value: Vec<u8>) -> Result<N
             // recurse into the child node.
             vec[idx] = if vec[idx] == EmptySlot {
                 // XXX check that the value is at least 1
-                Leaf(NibbleKey::new(key[1..].to_vec()), value)
+                Leaf(NibbleKey::from(key[1..].to_vec()), value)
             } else {
                 insert_leaf(&mut vec[idx], &NibbleKey::from(key[1..].to_vec()), value)?
             };
@@ -538,12 +538,10 @@ pub fn make_multiproof(root: &Node, keys: Vec<NibbleKey>) -> Result<Multiproof, 
 #[cfg(test)]
 mod tests {
     extern crate hex;
-    //extern crate rand;
 
     use super::Instruction::*;
     use super::Node::*;
     use super::*;
-    //use rand::prelude::*;
 
     #[test]
     fn validate_tree() {
@@ -570,8 +568,8 @@ mod tests {
             new_root,
             Branch(vec![
                 EmptySlot,
-                Leaf(NibbleKey::new(vec![1u8; 31]), vec![1u8; 32]),
-                Leaf(NibbleKey::new(vec![2u8; 31]), vec![0u8; 32]),
+                Leaf(NibbleKey::from(vec![1u8; 31]), vec![1u8; 32]),
+                Leaf(NibbleKey::from(vec![2u8; 31]), vec![0u8; 32]),
                 EmptySlot,
                 EmptySlot,
                 EmptySlot,
@@ -637,11 +635,11 @@ mod tests {
         assert_eq!(v.len(), 2);
         assert_eq!(
             v[0],
-            rlp::encode(&Leaf(NibbleKey::new(vec![1u8; 31]), vec![1u8; 32]))
+            rlp::encode(&Leaf(NibbleKey::from(vec![1u8; 31]), vec![1u8; 32]))
         );
         assert_eq!(
             v[1],
-            rlp::encode(&Leaf(NibbleKey::new(vec![2u8; 31]), vec![0u8; 32]))
+            rlp::encode(&Leaf(NibbleKey::from(vec![2u8; 31]), vec![0u8; 32]))
         );
     }
 
@@ -674,7 +672,7 @@ mod tests {
         assert_eq!(v.len(), 1); // Only one value
         assert_eq!(
             v[0],
-            rlp::encode(&Leaf(NibbleKey::new(vec![1u8; 31]), vec![1u8; 32]))
+            rlp::encode(&Leaf(NibbleKey::from(vec![1u8; 31]), vec![1u8; 32]))
         );
     }
 
@@ -796,10 +794,10 @@ mod tests {
     #[test]
     fn insert_leaf_zero_length_key_after_fullnode() {
         let mut root = Extension(
-            NibbleKey::new(vec![0u8; 31]),
+            NibbleKey::from(vec![0u8; 31]),
             Box::new(Branch(vec![
                 EmptySlot,
-                Leaf(NibbleKey::new(vec![]), vec![0u8; 32]),
+                Leaf(NibbleKey::from(vec![]), vec![0u8; 32]),
                 EmptySlot,
                 EmptySlot,
                 EmptySlot,
@@ -820,10 +818,10 @@ mod tests {
         assert_eq!(
             out,
             Extension(
-                NibbleKey::new(vec![0u8; 31]),
+                NibbleKey::from(vec![0u8; 31]),
                 Box::new(Branch(vec![
-                    Leaf(NibbleKey::new(vec![]), vec![1u8; 32]),
-                    Leaf(NibbleKey::new(vec![]), vec![0u8; 32]),
+                    Leaf(NibbleKey::from(vec![]), vec![1u8; 32]),
+                    Leaf(NibbleKey::from(vec![]), vec![0u8; 32]),
                     EmptySlot,
                     EmptySlot,
                     EmptySlot,
@@ -846,8 +844,8 @@ mod tests {
     #[test]
     fn insert_leaf_into_extension_root_all_bytes_in_key_common() {
         let mut root = Extension(
-            NibbleKey::new(vec![0xd, 0xe, 0xa, 0xd]),
-            Box::new(Leaf(NibbleKey::new(vec![0u8; 28]), vec![1u8; 32])),
+            NibbleKey::from(vec![0xd, 0xe, 0xa, 0xd]),
+            Box::new(Leaf(NibbleKey::from(vec![0u8; 28]), vec![1u8; 32])),
         );
         let mut key = vec![1u8; 32];
         key[0] = 0xd;
@@ -858,10 +856,10 @@ mod tests {
         assert_eq!(
             out,
             Extension(
-                NibbleKey::new(vec![0xd, 0xe, 0xa, 0xd]),
+                NibbleKey::from(vec![0xd, 0xe, 0xa, 0xd]),
                 Box::new(Branch(vec![
-                    Leaf(NibbleKey::new(vec![0u8; 27]), vec![1u8; 32]),
-                    Leaf(NibbleKey::new(vec![1u8; 27]), vec![2u8; 32]),
+                    Leaf(NibbleKey::from(vec![0u8; 27]), vec![1u8; 32]),
+                    Leaf(NibbleKey::from(vec![1u8; 27]), vec![2u8; 32]),
                     EmptySlot,
                     EmptySlot,
                     EmptySlot,
@@ -884,8 +882,8 @@ mod tests {
     #[test]
     fn insert_leaf_into_extension_root_no_common_bytes_in_key() {
         let mut root = Extension(
-            NibbleKey::new(vec![0xd, 0xe, 0xa, 0xd]),
-            Box::new(Leaf(NibbleKey::new(vec![0u8; 24]), vec![1u8; 32])),
+            NibbleKey::from(vec![0xd, 0xe, 0xa, 0xd]),
+            Box::new(Leaf(NibbleKey::from(vec![0u8; 24]), vec![1u8; 32])),
         );
         let out = insert_leaf(&mut root, &NibbleKey::from(vec![2u8; 32]), vec![1u8; 32]).unwrap();
         assert_eq!(
@@ -893,7 +891,7 @@ mod tests {
             Branch(vec![
                 EmptySlot,
                 EmptySlot,
-                Leaf(NibbleKey::new(vec![2u8; 31]), vec![1u8; 32]),
+                Leaf(NibbleKey::from(vec![2u8; 31]), vec![1u8; 32]),
                 EmptySlot,
                 EmptySlot,
                 EmptySlot,
@@ -905,8 +903,8 @@ mod tests {
                 EmptySlot,
                 EmptySlot,
                 Extension(
-                    NibbleKey::new(vec![14, 10, 13]),
-                    Box::new(Leaf(NibbleKey::new(vec![0u8; 24]), vec![1u8; 32]))
+                    NibbleKey::from(vec![14, 10, 13]),
+                    Box::new(Leaf(NibbleKey::from(vec![0u8; 24]), vec![1u8; 32]))
                 ),
                 EmptySlot,
                 EmptySlot
@@ -917,8 +915,8 @@ mod tests {
     #[test]
     fn insert_leaf_into_extension_root_half_bytes_in_key_common() {
         let mut root = Extension(
-            NibbleKey::new(vec![0xd, 0xe, 0xa, 0xd]),
-            Box::new(Leaf(NibbleKey::new(vec![0u8; 28]), vec![1u8; 32])),
+            NibbleKey::from(vec![0xd, 0xe, 0xa, 0xd]),
+            Box::new(Leaf(NibbleKey::from(vec![0u8; 28]), vec![1u8; 32])),
         );
         let mut key = vec![0u8; 32];
         key[0] = 0xd;
@@ -927,9 +925,9 @@ mod tests {
         assert_eq!(
             out,
             Extension(
-                NibbleKey::new(vec![0xd, 0xe]),
+                NibbleKey::from(vec![0xd, 0xe]),
                 Box::new(Branch(vec![
-                    Leaf(NibbleKey::new(vec![0u8; 29]), vec![1u8; 32]),
+                    Leaf(NibbleKey::from(vec![0u8; 29]), vec![1u8; 32]),
                     EmptySlot,
                     EmptySlot,
                     EmptySlot,
@@ -940,8 +938,8 @@ mod tests {
                     EmptySlot,
                     EmptySlot,
                     Extension(
-                        NibbleKey::new(vec![0xd]),
-                        Box::new(Leaf(NibbleKey::new(vec![0u8; 28]), vec![1u8; 32]))
+                        NibbleKey::from(vec![0xd]),
+                        Box::new(Leaf(NibbleKey::from(vec![0u8; 28]), vec![1u8; 32]))
                     ),
                     EmptySlot,
                     EmptySlot,
@@ -956,8 +954,8 @@ mod tests {
     #[test]
     fn insert_leaf_into_extension_root_almost_all_bytes_in_key_common() {
         let mut root = Extension(
-            NibbleKey::new(vec![0xd, 0xe, 0xa, 0xd]),
-            Box::new(Leaf(NibbleKey::new(vec![0u8; 28]), vec![1u8; 32])),
+            NibbleKey::from(vec![0xd, 0xe, 0xa, 0xd]),
+            Box::new(Leaf(NibbleKey::from(vec![0u8; 28]), vec![1u8; 32])),
         );
         let mut key = vec![0u8; 32];
         key[0] = 0xd;
@@ -967,9 +965,9 @@ mod tests {
         assert_eq!(
             out,
             Extension(
-                NibbleKey::new(vec![0xd, 0xe, 0xa]),
+                NibbleKey::from(vec![0xd, 0xe, 0xa]),
                 Box::new(Branch(vec![
-                    Leaf(NibbleKey::new(vec![0u8; 28]), vec![1u8; 32]),
+                    Leaf(NibbleKey::from(vec![0u8; 28]), vec![1u8; 32]),
                     EmptySlot,
                     EmptySlot,
                     EmptySlot,
@@ -982,7 +980,7 @@ mod tests {
                     EmptySlot,
                     EmptySlot,
                     EmptySlot,
-                    Leaf(NibbleKey::new(vec![0u8; 28]), vec![1u8; 32]),
+                    Leaf(NibbleKey::from(vec![0u8; 28]), vec![1u8; 32]),
                     EmptySlot,
                     EmptySlot
                 ]))
@@ -999,16 +997,16 @@ mod tests {
             }
             *v = 2u8;
         }
-        let mut root = Leaf(NibbleKey::new(key), vec![1u8; 32]);
+        let mut root = Leaf(NibbleKey::from(key), vec![1u8; 32]);
         let out = insert_leaf(&mut root, &NibbleKey::from(vec![2u8; 32]), vec![1u8; 32]).unwrap();
         assert_eq!(
             out,
             Extension(
-                NibbleKey::new(vec![2u8; 16]),
+                NibbleKey::from(vec![2u8; 16]),
                 Box::new(Branch(vec![
-                    Leaf(NibbleKey::new(vec![0u8; 15]), vec![1u8; 32]),
+                    Leaf(NibbleKey::from(vec![0u8; 15]), vec![1u8; 32]),
                     EmptySlot,
-                    Leaf(NibbleKey::new(vec![2u8; 15]), vec![1u8; 32]),
+                    Leaf(NibbleKey::from(vec![2u8; 15]), vec![1u8; 32]),
                     EmptySlot,
                     EmptySlot,
                     EmptySlot,
@@ -1029,14 +1027,14 @@ mod tests {
 
     #[test]
     fn insert_leaf_into_leaf_root_no_common_bytes_in_key() {
-        let mut root = Leaf(NibbleKey::new(vec![1u8; 32]), vec![1u8; 32]);
+        let mut root = Leaf(NibbleKey::from(vec![1u8; 32]), vec![1u8; 32]);
         let out = insert_leaf(&mut root, &NibbleKey::from(vec![2u8; 32]), vec![1u8; 32]).unwrap();
         assert_eq!(
             out,
             Branch(vec![
                 EmptySlot,
-                Leaf(NibbleKey::new(vec![1u8; 31]), vec![1u8; 32]),
-                Leaf(NibbleKey::new(vec![2u8; 31]), vec![1u8; 32]),
+                Leaf(NibbleKey::from(vec![1u8; 31]), vec![1u8; 32]),
+                Leaf(NibbleKey::from(vec![2u8; 31]), vec![1u8; 32]),
                 EmptySlot,
                 EmptySlot,
                 EmptySlot,
@@ -1059,7 +1057,7 @@ mod tests {
         let mut root = Node::default();
         assert_eq!(root, EmptySlot);
         let out = insert_leaf(&mut root, &NibbleKey::from(vec![0u8; 32]), vec![1u8; 32]).unwrap();
-        assert_eq!(out, Leaf(NibbleKey::new(vec![0u8; 32]), vec![1u8; 32]));
+        assert_eq!(out, Leaf(NibbleKey::from(vec![0u8; 32]), vec![1u8; 32]));
     }
 
     #[test]
@@ -1071,8 +1069,8 @@ mod tests {
         assert_eq!(
             root,
             Branch(vec![
-                Leaf(NibbleKey::new(vec![0u8; 31]), vec![1u8; 32]),
-                Leaf(NibbleKey::new(vec![1u8; 31]), vec![1u8; 32]),
+                Leaf(NibbleKey::from(vec![0u8; 31]), vec![1u8; 32]),
+                Leaf(NibbleKey::from(vec![1u8; 31]), vec![1u8; 32]),
                 EmptySlot,
                 EmptySlot,
                 EmptySlot,
@@ -1099,7 +1097,7 @@ mod tests {
         assert_eq!(
             out.unwrap(),
             Branch(vec![
-                Leaf(NibbleKey::new(vec![0u8; 31]), vec![1u8; 32]),
+                Leaf(NibbleKey::from(vec![0u8; 31]), vec![1u8; 32]),
                 EmptySlot,
                 EmptySlot,
                 EmptySlot,
@@ -1144,7 +1142,7 @@ mod tests {
             out.unwrap(),
             Branch(vec![
                 Branch(vec![
-                    Leaf(NibbleKey::new(vec![0u8; 30]), vec![1u8; 32]),
+                    Leaf(NibbleKey::from(vec![0u8; 30]), vec![1u8; 32]),
                     EmptySlot,
                     EmptySlot,
                     EmptySlot,
@@ -1183,16 +1181,17 @@ mod tests {
     #[test]
     fn insert_leaf_two_embedded_nodes() {
         let expected_root =
-            hex_string_to_vec("0x1e1f73cc50d595585797d261df5be9bf69037a57e6470c9e4ffc87b6221ab67a");
+            hex::decode(&"0x1e1f73cc50d595585797d261df5be9bf69037a57e6470c9e4ffc87b6221ab67a"[2..])
+                .unwrap();
         let inputs = [
-            ["0x1111111111111111111111111111111111111111", "0xffff"],
-            ["0x2222222222222222222222222222222222222222", "0xeeee"],
+            ("0x1111111111111111111111111111111111111111", "0xffff"),
+            ("0x2222222222222222222222222222222222222222", "0xeeee"),
         ];
 
         let mut root = Branch(vec![EmptySlot; 16]);
-        for i in &inputs {
-            let k = NibbleKey::from(utils::ByteKey(hex_string_to_vec(i[0])));
-            let v = hex_string_to_vec(i[1]);
+        for (ik, iv) in inputs.iter() {
+            let k = NibbleKey::from(utils::ByteKey(hex::decode(&ik[2..]).unwrap()));
+            let v = hex::decode(&iv[2..]).unwrap();
             insert_leaf(&mut root, &k, v).unwrap();
         }
 
@@ -1211,7 +1210,7 @@ mod tests {
             instructions: vec![LEAF(0)],
         };
         let out = rebuild(&proof).unwrap();
-        assert_eq!(out, Leaf(NibbleKey::new(vec![]), vec![4, 5, 6]))
+        assert_eq!(out, Leaf(NibbleKey::from(vec![]), vec![4, 5, 6]))
     }
 
     #[test]
@@ -1228,7 +1227,7 @@ mod tests {
         assert_eq!(
             out,
             Branch(vec![
-                Leaf(NibbleKey::new(vec![]), vec![4, 5, 6]),
+                Leaf(NibbleKey::from(vec![]), vec![4, 5, 6]),
                 EmptySlot,
                 EmptySlot,
                 EmptySlot,
@@ -1262,9 +1261,9 @@ mod tests {
         assert_eq!(
             out,
             Branch(vec![
-                Leaf(NibbleKey::new(vec![]), vec![4, 5, 6]),
+                Leaf(NibbleKey::from(vec![]), vec![4, 5, 6]),
                 EmptySlot,
-                Leaf(NibbleKey::new(vec![9]), vec![10, 11, 12]),
+                Leaf(NibbleKey::from(vec![9]), vec![10, 11, 12]),
                 EmptySlot,
                 EmptySlot,
                 EmptySlot,
@@ -1302,11 +1301,11 @@ mod tests {
         assert_eq!(
             out,
             Extension(
-                NibbleKey::new(vec![13, 14, 15]),
+                NibbleKey::from(vec![13, 14, 15]),
                 Box::new(Branch(vec![
-                    Leaf(NibbleKey::new(vec![]), vec![4, 5, 6]),
+                    Leaf(NibbleKey::from(vec![]), vec![4, 5, 6]),
                     EmptySlot,
-                    Leaf(NibbleKey::new(vec![9]), vec![10, 11, 12]),
+                    Leaf(NibbleKey::from(vec![9]), vec![10, 11, 12]),
                     EmptySlot,
                     EmptySlot,
                     EmptySlot,
@@ -1328,7 +1327,7 @@ mod tests {
     #[test]
     fn single_value_hash() {
         assert_eq!(
-            Leaf(NibbleKey::new(vec![1, 2, 3]), vec![4, 5, 6]).hash(),
+            Leaf(NibbleKey::from(vec![1, 2, 3]), vec![4, 5, 6]).hash(),
             vec![199, 130, 49, 35, 131, 4, 5, 6]
         );
     }
@@ -1336,7 +1335,7 @@ mod tests {
     #[test]
     fn big_value_single_key_hash() {
         assert_eq!(
-            Leaf(NibbleKey::new(vec![0u8; 32]), vec![4u8; 32]).hash(),
+            Leaf(NibbleKey::from(vec![0u8; 32]), vec![4u8; 32]).hash(),
             vec![
                 99, 116, 144, 157, 101, 254, 188, 135, 196, 46, 49, 240, 157, 79, 192, 61, 117,
                 243, 84, 131, 36, 12, 147, 251, 17, 134, 48, 59, 76, 39, 205, 106
@@ -1347,7 +1346,7 @@ mod tests {
     #[test]
     fn big_value_single_big_key_hash() {
         assert_eq!(
-            Leaf(NibbleKey::new(vec![0u8; 32]), vec![1u8; 32]).hash(),
+            Leaf(NibbleKey::from(vec![0u8; 32]), vec![1u8; 32]).hash(),
             vec![
                 132, 254, 5, 139, 174, 187, 212, 158, 12, 39, 213, 88, 18, 194, 107, 214, 83, 52,
                 2, 1, 66, 133, 239, 172, 206, 141, 135, 220, 34, 196, 98, 222
@@ -1365,9 +1364,9 @@ mod tests {
     fn branch_hash() {
         assert_eq!(
             Branch(vec![
-                Leaf(NibbleKey::new(vec![]), vec![4, 5, 6]),
+                Leaf(NibbleKey::from(vec![]), vec![4, 5, 6]),
                 EmptySlot,
-                Leaf(NibbleKey::new(vec![9]), vec![10, 11, 12]),
+                Leaf(NibbleKey::from(vec![9]), vec![10, 11, 12]),
                 EmptySlot,
                 EmptySlot,
                 EmptySlot,
@@ -1404,7 +1403,7 @@ mod tests {
         let mp = Multiproof {
             hashes: vec![vec![1u8; 32]],
             instructions: vec![LEAF(0)],
-            keyvals: vec![rlp::encode(&Leaf(NibbleKey::new(vec![1]), vec![2]))],
+            keyvals: vec![rlp::encode(&Leaf(NibbleKey::from(vec![1]), vec![2]))],
         };
         let rlp = rlp::encode(&mp);
         let decoded = rlp::decode::<Multiproof>(&rlp).unwrap();
@@ -1412,7 +1411,7 @@ mod tests {
             decoded,
             Multiproof {
                 hashes: vec![vec![1u8; 32]],
-                keyvals: vec![rlp::encode(&Leaf(NibbleKey::new(vec![1]), vec![2]))],
+                keyvals: vec![rlp::encode(&Leaf(NibbleKey::from(vec![1]), vec![2]))],
                 instructions: vec![LEAF(0)]
             }
         )
@@ -1444,13 +1443,5 @@ mod tests {
 
         let rebuilt_root = rebuild(&proof).unwrap();
         assert_eq!(new_root, rebuilt_root);
-    }
-
-    fn hex_string_to_vec(s: &str) -> Vec<u8> {
-        // Assumes `0x` prefix
-        (2..s.len())
-            .step_by(2)
-            .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap())
-            .collect()
     }
 }
