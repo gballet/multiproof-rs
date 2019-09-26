@@ -607,17 +607,14 @@ pub fn make_multiproof(root: &Node, keys: Vec<NibbleKey>) -> Result<Multiproof, 
                 .to_string());
             }
 
-            if *leafkey == keys[0] {
+            let rlp = if *leafkey == keys[0] {
                 instructions.push(Instruction::LEAF(leafkey.len()));
-                let rlp = rlp::encode(&Leaf(leafkey.clone(), leafval.clone()));
-                values.push(rlp);
+                rlp::encode(&Leaf(leafkey.clone(), leafval.clone()))
             } else {
-                return Err(format!(
-                    "Trying to apply the wrong key {:?} != {:?}",
-                    keys[0], leafkey
-                )
-                .to_string());
-            }
+                instructions.push(Instruction::LEAF(keys[0].len()));
+                rlp::encode(&Leaf(keys[0].clone(), vec![]))
+            };
+            values.push(rlp);
         }
         Extension(extkey, box child) => {
             // Make sure that all keys have the same prefix, corresponding
@@ -1655,5 +1652,32 @@ mod tests {
                 241, 68, 121, 143, 178, 128, 248, 120, 199, 203, 34, 78, 26, 105, 77
             ]
         );
+    }
+
+    #[test]
+    fn test_nullkey() {
+        let mut root = Node::default();
+        root = insert_leaf(&mut root, &NibbleKey::from(vec![0u8; 32]), vec![0u8; 32]).unwrap();
+        root = insert_leaf(
+            &mut root,
+            &NibbleKey::from(ByteKey::from(
+                hex::decode("11111111111111110000000000000000").unwrap(),
+            )),
+            vec![0u8; 32],
+        )
+        .unwrap();
+        let proof = make_multiproof(&root, vec![NibbleKey::from(vec![1u8; 32])]).unwrap();
+        assert_eq!(
+            proof.hashes,
+            vec![[
+                251, 145, 132, 252, 92, 249, 202, 65, 20, 16, 160, 32, 246, 163, 155, 125, 17, 186,
+                16, 171, 64, 108, 250, 70, 60, 207, 16, 164, 199, 41, 252, 143
+            ]]
+        );
+        assert_eq!(
+            proof.keyvals,
+            vec![[210, 144, 49, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 128]]
+        );
+        assert_eq!(proof.instructions.len(), 4);
     }
 }
