@@ -336,10 +336,16 @@ pub fn rebuild(proof: &Multiproof) -> Result<Node, String> {
             }
             LEAF(keylength) => {
                 if let Some(Leaf(key, value)) = kviter.next() {
-                    stack.push(Leaf(
-                        NibbleKey::from(key[key.len() - *keylength..].to_vec()),
-                        value.to_vec(),
-                    ));
+                    // If the value is empty, we have a NULL key and
+                    // therefore an EmptySlot should be returned.
+                    if value.len() == 0 {
+                        stack.push(EmptySlot);
+                    } else {
+                        stack.push(Leaf(
+                            NibbleKey::from(key[key.len() - *keylength..].to_vec()),
+                            value.to_vec(),
+                        ));
+                    }
                 } else {
                     return Err(format!(
                         "Proof requires one more (key,value) pair in LEAF({})",
@@ -1679,5 +1685,31 @@ mod tests {
             vec![[210, 144, 49, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 128]]
         );
         assert_eq!(proof.instructions.len(), 4);
+
+        let rebuilt = rebuild(&proof).unwrap();
+        assert_eq!(
+            rebuilt,
+            Branch(vec![
+                Hash(vec![
+                    251, 145, 132, 252, 92, 249, 202, 65, 20, 16, 160, 32, 246, 163, 155, 125, 17,
+                    186, 16, 171, 64, 108, 250, 70, 60, 207, 16, 164, 199, 41, 252, 143
+                ]),
+                Hash(vec![]),
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot
+            ])
+        );
     }
 }
