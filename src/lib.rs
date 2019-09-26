@@ -1538,14 +1538,6 @@ mod tests {
         assert_eq!(new_root, rebuilt_root);
     }
 
-    fn hex_string_to_vec(s: &str) -> Vec<u8> {
-        // Assumes `0x` prefix
-        (2..s.len())
-            .step_by(2)
-            .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap())
-            .collect()
-    }
-
     #[test]
     fn check_payload_length_exactly_32_bytes() {
         let mut root = Node::default();
