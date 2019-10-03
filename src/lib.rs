@@ -77,18 +77,44 @@ impl std::ops::Index<&NibbleKey> for Node {
     type Output = Node;
     #[inline]
     fn index(&self, k: &NibbleKey) -> &Node {
+        // If the key has 0-length, then the search is over and
+        // the current node is returned.
         if k.len() == 0 {
             self
         } else {
             match self {
                 Node::Branch(ref children) => {
-                    if k.len() == 0 {
-                        self
+                    children[k[0] as usize].index(&NibbleKey::from(&k[1..]))
+                }
+                Node::Extension(ref ext, box child) => {
+                    let factor_length = ext.factor_length(k);
+                    // If the factorized length is that of the extension,
+                    // then the indexing key is compatible with this tree
+                    // and the function recurses.
+                    if factor_length == ext.len() {
+                        child.index(&k[factor_length..].into())
                     } else {
-                        children[k[0] as usize].index(&NibbleKey::from(&k[1..]))
+                        // Otherwise, we either have a key that is shorter
+                        // or a differing entry. The former returns the
+                        // current node and the latter panics.
+                        if k.len() == factor_length {
+                            self
+                        } else {
+                            panic!("Requested key isn't present in the tree")
+                        }
                     }
                 }
-                _ => panic!("Not implemented"),
+                Node::Leaf(ref key, _) => {
+                    let factor_length = key.factor_length(k);
+                    if k[..factor_length] == key[..factor_length] {
+                        self
+                    } else {
+                        panic!("Requested key isn't present in the tree")
+                    }
+                }
+                Node::EmptySlot | Node::Hash(_) => {
+                    panic!("Requested key isn't present in the tree")
+                }
             }
         }
     }
@@ -188,7 +214,7 @@ impl Node {
         }
     }
 
-    fn is_key_present(&self, key: &NibbleKey) -> bool {
+    pub fn is_key_present(&self, key: &NibbleKey) -> bool {
         match self {
             Node::Leaf(ref k, _) => k == key,
             Node::Hash(_) => false,
@@ -1644,7 +1670,8 @@ mod tests {
     }
 
     #[test]
-    fn test_nullkey() {
+    fn test_nullkey_leaf() {
+        let missing_key = NibbleKey::from(vec![1u8; 32]);
         let mut root = Node::default();
         root = insert_leaf(&mut root, &NibbleKey::from(vec![0u8; 32]), vec![0u8; 32]).unwrap();
         root = insert_leaf(
@@ -1655,17 +1682,21 @@ mod tests {
             vec![0u8; 32],
         )
         .unwrap();
-        let proof = make_multiproof(&root, vec![NibbleKey::from(vec![1u8; 32])]).unwrap();
+        let proof = make_multiproof(&root, vec![missing_key.clone()]).unwrap();
+
         assert_eq!(
             proof.hashes,
-            vec![[
+            vec![vec![
                 251, 145, 132, 252, 92, 249, 202, 65, 20, 16, 160, 32, 246, 163, 155, 125, 17, 186,
                 16, 171, 64, 108, 250, 70, 60, 207, 16, 164, 199, 41, 252, 143
-            ]]
+            ],]
         );
         assert_eq!(
             proof.keyvals,
-            vec![[210, 144, 49, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 128]]
+            vec![vec![
+                242, 144, 49, 17, 17, 17, 17, 17, 17, 17, 0, 0, 0, 0, 0, 0, 0, 0, 160, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            ]]
         );
         assert_eq!(proof.instructions.len(), 4);
 
@@ -1673,11 +1704,18 @@ mod tests {
         assert_eq!(
             rebuilt,
             Branch(vec![
-                Hash(vec![
-                    251, 145, 132, 252, 92, 249, 202, 65, 20, 16, 160, 32, 246, 163, 155, 125, 17,
-                    186, 16, 171, 64, 108, 250, 70, 60, 207, 16, 164, 199, 41, 252, 143
-                ]),
-                Hash(vec![]),
+                Hash(
+                    hex::decode("fb9184fc5cf9ca411410a020f6a39b7d11ba10ab406cfa463ccf10a4c729fc8f")
+                        .unwrap()
+                ),
+                Leaf(
+                    vec![
+                        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                        0, 0, 0, 0, 0, 0
+                    ]
+                    .into(),
+                    vec![0u8; 32]
+                ),
                 EmptySlot,
                 EmptySlot,
                 EmptySlot,
@@ -1694,5 +1732,232 @@ mod tests {
                 EmptySlot
             ])
         );
+        assert!(!rebuilt.is_key_present(&missing_key));
+    }
+
+    #[test]
+    fn test_nullkey_ext() {
+        let missing_key = NibbleKey::from(vec![1u8; 32]);
+        let mut root = Node::default();
+        root = insert_leaf(
+            &mut root,
+            &NibbleKey::from(ByteKey::from(
+                hex::decode("11111111111111182222222222222222").unwrap(),
+            )),
+            vec![0u8; 32],
+        )
+        .unwrap();
+        root = insert_leaf(
+            &mut root,
+            &NibbleKey::from(ByteKey::from(
+                hex::decode("11111111111111180000000000000000").unwrap(),
+            )),
+            vec![0u8; 32],
+        )
+        .unwrap();
+
+        let proof = make_multiproof(&root, vec![missing_key.clone()]).unwrap();
+        assert_eq!(
+            proof.hashes,
+            vec![
+                hex::decode("72b1a3493c86a014dca29b01b487031ff64bf71c09bdd62815c45928baf2dbf0")
+                    .unwrap()
+            ]
+        );
+        assert_eq!(proof.keyvals.len(), 0);
+        assert_eq!(proof.instructions.len(), 2);
+
+        let rebuilt = rebuild(&proof).unwrap();
+        assert_eq!(
+            rebuilt,
+            Extension(
+                vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 8].into(),
+                Box::new(Hash(vec![
+                    114, 177, 163, 73, 60, 134, 160, 20, 220, 162, 155, 1, 180, 135, 3, 31, 246,
+                    75, 247, 28, 9, 189, 214, 40, 21, 196, 89, 40, 186, 242, 219, 240
+                ]))
+            )
+        );
+        assert!(!rebuilt.is_key_present(&missing_key));
+    }
+
+    #[test]
+    fn test_nullkey_branch() {
+        let missing_key = NibbleKey::from(vec![2u8; 32]);
+        let mut root = Node::default();
+        root = insert_leaf(
+            &mut root,
+            &NibbleKey::from(ByteKey::from(
+                hex::decode("11111111111111182222222222222222").unwrap(),
+            )),
+            vec![0u8; 32],
+        )
+        .unwrap();
+        root = insert_leaf(
+            &mut root,
+            &NibbleKey::from(ByteKey::from(
+                hex::decode("01111111111111180000000000000000").unwrap(),
+            )),
+            vec![0u8; 32],
+        )
+        .unwrap();
+
+        let proof = make_multiproof(&root, vec![missing_key.clone()]).unwrap();
+        assert_eq!(
+            proof.hashes,
+            vec![
+                hex::decode("df853a88c4113e0274dea41494ea397aee50d9f5be0e88c9eb274a7ce0716bb7")
+                    .unwrap(),
+                hex::decode("1a4c4b1aa982d7b8094ce199d89aba598bdc4a8c91c3133bbbcebe731229305c")
+                    .unwrap()
+            ]
+        );
+        assert_eq!(proof.keyvals.len(), 1);
+        assert_eq!(proof.instructions.len(), 6);
+
+        let rebuilt = rebuild(&proof).unwrap();
+        assert_eq!(
+            rebuilt,
+            Branch(vec![
+                Hash(vec![
+                    223, 133, 58, 136, 196, 17, 62, 2, 116, 222, 164, 20, 148, 234, 57, 122, 238,
+                    80, 217, 245, 190, 14, 136, 201, 235, 39, 74, 124, 224, 113, 107, 183
+                ]),
+                Hash(vec![
+                    26, 76, 75, 26, 169, 130, 215, 184, 9, 76, 225, 153, 216, 154, 186, 89, 139,
+                    220, 74, 140, 145, 195, 19, 59, 187, 206, 190, 115, 18, 41, 48, 92
+                ]),
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot
+            ])
+        );
+        assert!(!rebuilt.is_key_present(&missing_key));
+    }
+
+    #[test]
+    fn test_nullkey_empty() {
+        let root = Node::default();
+        let missing_key = NibbleKey::from(vec![2u8; 32]);
+
+        let proof = make_multiproof(&root, vec![missing_key.clone()]).unwrap();
+        let rebuilt = rebuild(&proof).unwrap();
+        assert!(!rebuilt.is_key_present(&missing_key));
+    }
+
+    #[test]
+    fn subnode_index_branch() {
+        let mut root = Node::default();
+        let k1 = &NibbleKey::from(ByteKey::from(
+            hex::decode("11111111111111110000000000000000").unwrap(),
+        ));
+        let k2 = &NibbleKey::from(ByteKey::from(
+            hex::decode("01111111111111110000000000000000").unwrap(),
+        ));
+        let k3 = &NibbleKey::from(ByteKey::from(
+            hex::decode("00111111111111110000000000000000").unwrap(),
+        ));
+        root = insert_leaf(&mut root, k1, vec![0u8; 32]).unwrap();
+        root = insert_leaf(&mut root, k2, vec![0u8; 32]).unwrap();
+        root = insert_leaf(&mut root, k3, vec![0u8; 32]).unwrap();
+
+        assert_eq!(
+            root[&NibbleKey::from(&k2[..2])],
+            Leaf(NibbleKey::from(&k2[2..]), vec![0u8; 32])
+        );
+    }
+
+    #[test]
+    fn subnode_index_extension() {
+        let mut root = Node::default();
+        let k1 = &NibbleKey::from(ByteKey::from(
+            hex::decode("11111111111111100000000000000000").unwrap(),
+        ));
+        let k2 = &NibbleKey::from(ByteKey::from(
+            hex::decode("11111111111111110000000000000000").unwrap(),
+        ));
+        let k3 = &NibbleKey::from(ByteKey::from(
+            hex::decode("11111111111111120000000000000000").unwrap(),
+        ));
+        root = insert_leaf(&mut root, k1, vec![0u8; 32]).unwrap();
+        root = insert_leaf(&mut root, k2, vec![0u8; 32]).unwrap();
+        root = insert_leaf(&mut root, k3, vec![0u8; 32]).unwrap();
+
+        // check that a partial key returns the whole key
+        assert_eq!(root[&NibbleKey::from(&k2[..2])], root);
+
+        // check that a key beyond the extension will recurse
+        assert_eq!(
+            root[&NibbleKey::from(ByteKey::from(hex::decode("1111111111111112").unwrap(),))],
+            Leaf(vec![0u8; 16].into(), vec![0u8; 32])
+        );
+    }
+    #[test]
+    fn subnode_index_empty_index() {
+        let mut root = Node::default();
+        let k1 = &NibbleKey::from(ByteKey::from(
+            hex::decode("11111111111111110000000000000000").unwrap(),
+        ));
+        let k2 = &NibbleKey::from(ByteKey::from(
+            hex::decode("01111111111111110000000000000000").unwrap(),
+        ));
+        let k3 = &NibbleKey::from(ByteKey::from(
+            hex::decode("00111111111111110000000000000000").unwrap(),
+        ));
+        root = insert_leaf(&mut root, k1, vec![0u8; 32]).unwrap();
+        root = insert_leaf(&mut root, k2, vec![0u8; 32]).unwrap();
+        root = insert_leaf(&mut root, k3, vec![0u8; 32]).unwrap();
+
+        assert_eq!(root[&NibbleKey::from(vec![])], root);
+    }
+
+    #[test]
+    fn key_present_found() {
+        let mut root = Node::default();
+        let k1 = &NibbleKey::from(ByteKey::from(
+            hex::decode("11111111111111110000000000000000").unwrap(),
+        ));
+        let k2 = &NibbleKey::from(ByteKey::from(
+            hex::decode("01111111111111110000000000000000").unwrap(),
+        ));
+        let k3 = &NibbleKey::from(ByteKey::from(
+            hex::decode("11111111111111111111111111111111").unwrap(),
+        ));
+
+        root = insert_leaf(&mut root, k1, vec![0u8; 32]).unwrap();
+        root = insert_leaf(&mut root, k2, vec![0u8; 32]).unwrap();
+        root = insert_leaf(&mut root, k3, vec![0u8; 32]).unwrap();
+
+        assert!(root.is_key_present(k1));
+    }
+
+    #[test]
+    fn key_absent_not_found() {
+        let mut root = Node::default();
+        let k1 = &NibbleKey::from(ByteKey::from(
+            hex::decode("11111111111111110000000000000000").unwrap(),
+        ));
+        let k2 = &NibbleKey::from(ByteKey::from(
+            hex::decode("01111111111111110000000000000000").unwrap(),
+        ));
+        let k3 = &NibbleKey::from(ByteKey::from(
+            hex::decode("11111111111111111111111111111111").unwrap(),
+        ));
+
+        root = insert_leaf(&mut root, k2, vec![0u8; 32]).unwrap();
+        root = insert_leaf(&mut root, k3, vec![0u8; 32]).unwrap();
+
+        assert!(!root.is_key_present(k1));
     }
 }
