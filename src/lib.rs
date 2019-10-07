@@ -91,8 +91,8 @@ impl Node {
     fn graphviz_key(key: NibbleKey) -> String {
         let mut ret = String::new();
         let nibbles: Vec<u8> = key.into();
-        for nibble in nibbles.iter() {
-            ret.push_str(&format!("<td>{}</td>", nibble));
+        for (i, nibble) in nibbles.iter().enumerate() {
+            ret.push_str(&format!("<td port=\"{}\">{:x}</td>", i, nibble));
         }
         ret
     }
@@ -110,23 +110,22 @@ impl Node {
             }
             Node::Branch(ref subnodes) => {
                 let name = format!("branch{}", hex::encode(pref.clone()));
-                let label = if prefix.len() > 0 {
-                    format!("{}", prefix[prefix.len() - 1])
-                } else {
-                    String::from("root")
-                };
+                let mut label = String::from("");
+                for i in 0..15 {
+                    label.push_str(&format!("<td port=\"{}\">{:x}</td>", i, i));
+                }
                 println!("{:?}", hex::encode(pref.clone()));
                 let mut refs = if prefix.len() > 0 {
                     vec![format!("{} -> {}", root, name)]
                 } else {
                     Vec::new()
                 };
-                let mut nodes = vec![format!("{} [label=\"{}\"]", name, label)];
+                let mut nodes = vec![format!("{} [shape=none,label=<<table border=\"0\" cellborder=\"1\" cellspacing=\"0\"><tr>{}</tr></table>>]", name, label)];
                 for (i, subnode) in subnodes.iter().enumerate() {
                     let mut subkey: Vec<u8> = prefix.clone().into();
                     subkey.push(i as u8);
                     let (sn, sr) =
-                        Node::graphviz_rec(&subnode, NibbleKey::from(subkey), name.clone());
+                        Node::graphviz_rec(&subnode, NibbleKey::from(subkey), format!("{}:{}", name, i));
                     nodes.extend(sn);
                     refs.extend(sr);
                 }
@@ -136,8 +135,10 @@ impl Node {
                 let name = format!("extension{}", hex::encode(pref.clone()));
                 let mut subkey: Vec<u8> = prefix.clone().into();
                 subkey.extend_from_slice(&ext[0..]);
-                let (sn, sr) = Node::graphviz_rec(subnode, NibbleKey::from(subkey), name.clone());
-                return (vec![name], vec![]);
+                let (mut sn, mut sr) = Node::graphviz_rec(subnode, NibbleKey::from(subkey), format!("{}:{}", name, ext.len()));
+                sn.push(format!("{} [label=<<table border=\"0\" cellspacing=\"0\" cellborder=\"1\"><tr>{}</tr></table>>]", name, Node::graphviz_key(ext.clone())));
+                sr.push(format!("{} -> {}:{}", root, name, 0));
+                return (sn, sr);
             }
             Node::Hash(ref h) => {
                 let name = format!("hash{}", hex::encode(pref.clone()));
