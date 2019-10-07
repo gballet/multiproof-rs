@@ -73,7 +73,7 @@ impl rlp::Decodable for Node {
 }
 
 impl Node {
-    fn hash(&self) -> Vec<u8> {
+    pub fn hash(&self) -> Vec<u8> {
         use Node::*;
         match self {
             EmptySlot => Vec::new(),
