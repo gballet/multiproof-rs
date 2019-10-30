@@ -73,6 +73,99 @@ impl rlp::Decodable for Node {
 }
 
 impl Node {
+    pub fn graphviz(&self) -> String {
+        let (nodes, refs) = self.graphviz_rec(NibbleKey::from(vec![]), String::from("root"));
+        format!(
+            "digraph D {{
+\tnode [shape=\"box\",label=\"hash\"];
+
+\t{}
+
+\t{}
+}}",
+            nodes.join("\n\t"),
+            refs.join("\n\t")
+        )
+    }
+
+    fn graphviz_key(key: NibbleKey) -> String {
+        let mut ret = String::new();
+        let nibbles: Vec<u8> = key.into();
+        for (i, nibble) in nibbles.iter().enumerate() {
+            ret.push_str(&format!("<td port=\"{}\">{:x}</td>", i, nibble));
+        }
+        ret
+    }
+
+    fn graphviz_rec(&self, prefix: NibbleKey, root: String) -> (Vec<String>, Vec<String>) {
+        let pref: Vec<u8> = prefix.clone().into();
+        match self {
+            Node::Leaf(ref k, ref v) => {
+                return (
+                    vec![
+                        format!("leaf{} [shape=none,margin=0,label=<<table border=\"0\" cellborder=\"1\" cellspacing=\"0\" cellpadding=\"4\"><tr>{}<td>{}</td></tr></table>>]", hex::encode(pref.clone()), Node::graphviz_key(k.clone()), hex::encode(v)),
+                    ],
+                    vec![format!("{} -> leaf{}", root, hex::encode(pref))],
+                );
+            }
+            Node::Branch(ref subnodes) => {
+                let name = format!("branch{}", hex::encode(pref.clone()));
+                let mut label = String::from("");
+                for i in 0..15 {
+                    label.push_str(&format!("<td port=\"{}\">{:x}</td>", i, i));
+                }
+                println!("{:?}", hex::encode(pref.clone()));
+                let mut refs = if prefix.len() > 0 {
+                    vec![format!("{} -> {}", root, name)]
+                } else {
+                    Vec::new()
+                };
+                let mut nodes = vec![format!("{} [shape=none,label=<<table border=\"0\" cellborder=\"1\" cellspacing=\"0\"><tr>{}</tr></table>>]", name, label)];
+                for (i, subnode) in subnodes.iter().enumerate() {
+                    let mut subkey: Vec<u8> = prefix.clone().into();
+                    subkey.push(i as u8);
+                    let (sn, sr) = Node::graphviz_rec(
+                        &subnode,
+                        NibbleKey::from(subkey),
+                        format!("{}:{}", name, i),
+                    );
+                    nodes.extend(sn);
+                    refs.extend(sr);
+                }
+                return (nodes, refs);
+            }
+            Node::Extension(ref ext, ref subnode) => {
+                let name = format!("extension{}", hex::encode(pref.clone()));
+                let mut subkey: Vec<u8> = prefix.clone().into();
+                subkey.extend_from_slice(&ext[0..]);
+                let (mut sn, mut sr) = Node::graphviz_rec(
+                    subnode,
+                    NibbleKey::from(subkey),
+                    format!("{}:{}", name, ext.len() - 1),
+                );
+                sn.push(format!("{} [shape=none,label=<<table border=\"0\" cellspacing=\"0\" cellborder=\"1\"><tr>{}</tr></table>>]", name, Node::graphviz_key(ext.clone())));
+                sr.push(format!("{} -> {}:{}", root, name, 0));
+                return (sn, sr);
+            }
+            Node::Hash(ref h) => {
+                let name = format!("hash{}", hex::encode(pref.clone()));
+                let label = if prefix.len() > 0 {
+                    String::from("hash")
+                } else {
+                    String::from("root")
+                };
+                return (
+                    vec![format!("{} [label=\"{}\"]", name, label)],
+                    vec![format!("{} -> {}", root, name)],
+                );
+            }
+            _ => {
+                /* Ignore EmptySlot */
+                (vec![], vec![])
+            }
+        }
+    }
+
     pub fn hash(&self) -> Vec<u8> {
         use Node::*;
         match self {
@@ -188,7 +281,7 @@ impl std::fmt::Display for Multiproof {
         }
         write!(f, "keyvals:\n")?;
         for kv in self.keyvals.iter() {
-            write!(f, "\t{}\n", hex::encode(kv))?;
+            write!(f, "\t{:?}\n", hex::encode(kv))?;
         }
         write!(f, "hashes:\n")?;
         for h in self.hashes.iter() {
