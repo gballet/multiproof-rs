@@ -124,8 +124,11 @@ impl Node {
                 for (i, subnode) in subnodes.iter().enumerate() {
                     let mut subkey: Vec<u8> = prefix.clone().into();
                     subkey.push(i as u8);
-                    let (sn, sr) =
-                        Node::graphviz_rec(&subnode, NibbleKey::from(subkey), format!("{}:{}", name, i));
+                    let (sn, sr) = Node::graphviz_rec(
+                        &subnode,
+                        NibbleKey::from(subkey),
+                        format!("{}:{}", name, i),
+                    );
                     nodes.extend(sn);
                     refs.extend(sr);
                 }
@@ -135,7 +138,11 @@ impl Node {
                 let name = format!("extension{}", hex::encode(pref.clone()));
                 let mut subkey: Vec<u8> = prefix.clone().into();
                 subkey.extend_from_slice(&ext[0..]);
-                let (mut sn, mut sr) = Node::graphviz_rec(subnode, NibbleKey::from(subkey), format!("{}:{}", name, ext.len()-1));
+                let (mut sn, mut sr) = Node::graphviz_rec(
+                    subnode,
+                    NibbleKey::from(subkey),
+                    format!("{}:{}", name, ext.len() - 1),
+                );
                 sn.push(format!("{} [shape=none,label=<<table border=\"0\" cellspacing=\"0\" cellborder=\"1\"><tr>{}</tr></table>>]", name, Node::graphviz_key(ext.clone())));
                 sr.push(format!("{} -> {}:{}", root, name, 0));
                 return (sn, sr);
@@ -334,7 +341,7 @@ pub fn rebuild(proof: &Multiproof) -> Result<Node, String> {
             }
             EXTENSION(key) => {
                 if let Some(node) = stack.pop() {
-                    stack.push(Extension(NibbleKey::new(key.to_vec()), Box::new(node)));
+                    stack.push(Extension(NibbleKey::from(key.to_vec()), Box::new(node)));
                 } else {
                     return Err(format!(
                         "Could not find a node on the stack, that is required for an EXTENSION({:?})",
