@@ -30,7 +30,7 @@ impl rlp::Encodable for Node {
                 s.append_list::<Vec<u8>, Vec<u8>>(&vec![k.with_hex_prefix(true), v.to_vec()]);
             }
             Node::Extension(ref ext, box node) => {
-                let extension_branch_hash = node.hash();
+                let extension_branch_hash = node.composition();
 
                 s.append_list::<Vec<u8>, Vec<u8>>(&vec![
                     ext.with_hex_prefix(false),
@@ -41,7 +41,7 @@ impl rlp::Encodable for Node {
                 let mut stream = rlp::RlpStream::new();
                 stream.begin_unbounded_list();
                 for node in nodes {
-                    let hash = node.hash();
+                    let hash = node.composition();
                     if hash.len() < 32 && hash.len() > 0 {
                         stream.append_raw(&hash, hash.len());
                     } else {
@@ -167,6 +167,26 @@ impl Node {
     }
 
     pub fn hash(&self) -> Vec<u8> {
+        let composed_node = self.composition();
+
+        // If `composition` returned a payload whose length is less
+        // than 32 bytes, then compute its keccack256 hash in order
+        // to return the root hash.
+        if composed_node.len() < 32 {
+            let mut hasher = Keccak256::new();
+            hasher.input(&composed_node);
+            Vec::<u8>::from(&hasher.result()[..])
+        } else {
+            composed_node
+        }
+    }
+
+    // This is the composition function that is described as `n` in the
+    // yellow paper. The difference with the root of the merkle tree is
+    // that it can potentially return an array of bytes whose length is
+    // less than 32 bytes, in which case is represents the RLP encoding
+    // of the root node.
+    fn composition(&self) -> Vec<u8> {
         use Node::*;
         match self {
             EmptySlot => Vec::new(),
@@ -1419,9 +1439,14 @@ mod tests {
 
     #[test]
     fn single_value_hash() {
+        let leaf = Leaf(NibbleKey::from(vec![1, 2, 3]), vec![4, 5, 6]);
+        assert_eq!(leaf.composition(), vec![199, 130, 49, 35, 131, 4, 5, 6]);
         assert_eq!(
-            Leaf(NibbleKey::from(vec![1, 2, 3]), vec![4, 5, 6]).hash(),
-            vec![199, 130, 49, 35, 131, 4, 5, 6]
+            leaf.hash(),
+            vec![
+                49, 52, 36, 163, 130, 221, 147, 71, 223, 121, 140, 253, 220, 114, 118, 36, 169, 89,
+                166, 229, 35, 209, 64, 242, 137, 173, 129, 227, 76, 91, 110, 151
+            ]
         );
     }
 
@@ -1450,34 +1475,48 @@ mod tests {
     #[test]
     fn empty_value_hash() {
         let node = EmptySlot;
-        assert_eq!(node.hash(), vec![0u8; 0]);
+        assert_eq!(node.composition(), vec![0u8; 0]);
+        assert_eq!(
+            node.hash(),
+            vec![
+                197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0,
+                182, 83, 202, 130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112
+            ]
+        );
     }
 
     #[test]
     fn branch_hash() {
+        let branch = Branch(vec![
+            Leaf(NibbleKey::from(vec![]), vec![4, 5, 6]),
+            EmptySlot,
+            Leaf(NibbleKey::from(vec![9]), vec![10, 11, 12]),
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+        ]);
         assert_eq!(
-            Branch(vec![
-                Leaf(NibbleKey::from(vec![]), vec![4, 5, 6]),
-                EmptySlot,
-                Leaf(NibbleKey::from(vec![9]), vec![10, 11, 12]),
-                EmptySlot,
-                EmptySlot,
-                EmptySlot,
-                EmptySlot,
-                EmptySlot,
-                EmptySlot,
-                EmptySlot,
-                EmptySlot,
-                EmptySlot,
-                EmptySlot,
-                EmptySlot,
-                EmptySlot,
-                EmptySlot
-            ])
-            .hash(),
+            branch.composition(),
             vec![
                 219, 197, 32, 131, 4, 5, 6, 128, 197, 57, 131, 10, 11, 12, 128, 128, 128, 128, 128,
                 128, 128, 128, 128, 128, 128, 128, 128, 128
+            ]
+        );
+        assert_eq!(
+            branch.hash(),
+            vec![
+                6, 134, 255, 246, 145, 43, 211, 204, 240, 23, 77, 89, 244, 40, 13, 2, 201, 73, 218,
+                51, 53, 12, 149, 35, 120, 93, 254, 247, 104, 88, 103, 177
             ]
         );
     }
@@ -1559,8 +1598,15 @@ mod tests {
 
         root = insert_leaf(&mut root, &NibbleKey::from(vec![1u8; 2]), vec![1u8; 20]).unwrap();
         assert_eq!(
-            root.hash(),
+            root.composition(),
             vec![216, 130, 32, 17, 148, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+        );
+        assert_eq!(
+            root.hash(),
+            vec![
+                121, 126, 245, 211, 88, 166, 171, 101, 137, 134, 207, 117, 161, 91, 198, 101, 156,
+                171, 181, 198, 146, 124, 98, 133, 207, 71, 22, 54, 4, 84, 237, 169
+            ]
         );
     }
 
@@ -1571,10 +1617,17 @@ mod tests {
         root = insert_leaf(&mut root, &NibbleKey::from(vec![2u8; 4]), vec![1u8; 2]).unwrap();
 
         assert_eq!(
-            root.hash(),
+            root.composition(),
             vec![
                 221, 128, 198, 130, 49, 17, 130, 1, 1, 198, 130, 50, 34, 130, 1, 1, 128, 128, 128,
                 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128
+            ]
+        );
+        assert_eq!(
+            root.hash(),
+            vec![
+                186, 8, 87, 233, 68, 14, 179, 61, 85, 127, 234, 111, 248, 166, 233, 195, 254, 176,
+                176, 11, 16, 226, 228, 129, 126, 230, 92, 191, 236, 208, 253, 79
             ]
         );
     }
@@ -1589,10 +1642,17 @@ mod tests {
         root = insert_leaf(&mut root, &NibbleKey::from(second_key), vec![1u8; 2]).unwrap();
 
         assert_eq!(
-            root.hash(),
+            root.composition(),
             vec![
                 222, 130, 0, 17, 154, 217, 128, 196, 49, 130, 1, 1, 196, 50, 130, 1, 1, 128, 128,
                 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128
+            ]
+        );
+        assert_eq!(
+            root.hash(),
+            vec![
+                121, 4, 12, 221, 211, 212, 144, 252, 108, 10, 139, 100, 184, 65, 160, 107, 191,
+                241, 68, 121, 143, 178, 128, 248, 120, 199, 203, 34, 78, 26, 105, 77
             ]
         );
     }
