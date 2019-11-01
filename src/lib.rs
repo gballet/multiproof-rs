@@ -1661,14 +1661,6 @@ mod tests {
         assert_eq!(new_root, rebuilt_root);
     }
 
-    fn hex_string_to_vec(s: &str) -> Vec<u8> {
-        // Assumes `0x` prefix
-        (2..s.len())
-            .step_by(2)
-            .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap())
-            .collect()
-    }
-
     #[test]
     fn test_nullkey_leaf() {
         let missing_key = NibbleKey::from(vec![1u8; 32]);
@@ -1959,5 +1951,85 @@ mod tests {
         root = insert_leaf(&mut root, k3, vec![0u8; 32]).unwrap();
 
         assert!(!root.is_key_present(k1));
+    }
+
+    #[test]
+    fn check_payload_length_exactly_32_bytes() {
+        let mut root = Node::default();
+
+        root = insert_leaf(&mut root, &NibbleKey::from(vec![1u8; 16]), vec![1u8; 20]).unwrap();
+        assert_eq!(root.hash().len(), 32);
+        assert_eq!(
+            root.hash(),
+            vec![
+                149, 160, 25, 137, 124, 149, 98, 15, 208, 235, 90, 71, 238, 186, 81, 6, 47, 67,
+                244, 224, 134, 155, 76, 154, 130, 70, 234, 61, 0, 11, 4, 135
+            ]
+        );
+    }
+
+    #[test]
+    fn check_leaf_length_less_than_32_bytes() {
+        let mut root = Node::default();
+
+        root = insert_leaf(&mut root, &NibbleKey::from(vec![1u8; 2]), vec![1u8; 20]).unwrap();
+        assert_eq!(
+            root.composition(),
+            vec![216, 130, 32, 17, 148, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+        );
+        assert_eq!(
+            root.hash(),
+            vec![
+                121, 126, 245, 211, 88, 166, 171, 101, 137, 134, 207, 117, 161, 91, 198, 101, 156,
+                171, 181, 198, 146, 124, 98, 133, 207, 71, 22, 54, 4, 84, 237, 169
+            ]
+        );
+    }
+
+    #[test]
+    fn check_branch_less_than_32_bytes() {
+        let mut root = Node::default();
+        root = insert_leaf(&mut root, &NibbleKey::from(vec![1u8; 4]), vec![1u8; 2]).unwrap();
+        root = insert_leaf(&mut root, &NibbleKey::from(vec![2u8; 4]), vec![1u8; 2]).unwrap();
+
+        assert_eq!(
+            root.composition(),
+            vec![
+                221, 128, 198, 130, 49, 17, 130, 1, 1, 198, 130, 50, 34, 130, 1, 1, 128, 128, 128,
+                128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128
+            ]
+        );
+        assert_eq!(
+            root.hash(),
+            vec![
+                186, 8, 87, 233, 68, 14, 179, 61, 85, 127, 234, 111, 248, 166, 233, 195, 254, 176,
+                176, 11, 16, 226, 228, 129, 126, 230, 92, 191, 236, 208, 253, 79
+            ]
+        );
+    }
+
+    #[test]
+    fn check_extension_less_than_32_bytes() {
+        let mut second_key = vec![1u8; 2];
+        second_key.extend(vec![2u8; 2]);
+
+        let mut root = Node::default();
+        root = insert_leaf(&mut root, &NibbleKey::from(vec![1u8; 4]), vec![1u8; 2]).unwrap();
+        root = insert_leaf(&mut root, &NibbleKey::from(second_key), vec![1u8; 2]).unwrap();
+
+        assert_eq!(
+            root.composition(),
+            vec![
+                222, 130, 0, 17, 154, 217, 128, 196, 49, 130, 1, 1, 196, 50, 130, 1, 1, 128, 128,
+                128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128
+            ]
+        );
+        assert_eq!(
+            root.hash(),
+            vec![
+                121, 4, 12, 221, 211, 212, 144, 252, 108, 10, 139, 100, 184, 65, 160, 107, 191,
+                241, 68, 121, 143, 178, 128, 248, 120, 199, 203, 34, 78, 26, 105, 77
+            ]
+        );
     }
 }
