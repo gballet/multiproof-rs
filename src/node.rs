@@ -3,9 +3,60 @@ extern crate sha3;
 use super::utils::*;
 use sha3::{Digest, Keccak256};
 
-pub trait Tree<K, V> {
+pub struct ChildIterator<'a, T: Tree + ?Sized> {
+    index: usize,
+    node: &'a T,
+}
+
+impl<'a> std::iter::Iterator for ChildIterator<'a, Node> {
+    type Item = Node;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        let node = &self.node;
+        if node.is_leaf() || node.is_empty() {
+            return None;
+        }
+
+        // At this stage, the node is either a hash, a branch
+        // or an extension. A hash isn't supported and should
+        // not even have been created.
+        if let Node::Hash(_) = node {
+            panic!("Can not iterate over a hash");
+        }
+
+        match node {
+            Node::Extension(_, box child) => {
+                // The iterator will return a value the first time it's called,
+                // and nothing the second time since it only has one child.
+                if self.index == 0 {
+                    self.index = 1;
+                    Some(child.clone())
+                } else {
+                    None
+                }
+            }
+            Node::Branch(ref vec) => {
+                if self.index < vec.len() {
+                    self.index += 1;
+                    Some(vec[self.index - 1].clone())
+                } else {
+                    None
+                }
+            }
+            // Should not happen
+            _ => panic!("This should never be reached"),
+        }
+    }
+}
+
+pub trait Tree {
+    type Key;
+    type Value;
     fn is_leaf(&self) -> bool;
-    fn insert(&mut self, key: &K, value: V) -> Result<(), String>;
+    fn is_empty(&self) -> bool;
+    fn children(&self) -> ChildIterator<dyn Tree<Key = Self::Key, Value = Self::Value>>;
+    fn insert(&mut self, key: &Self::Key, value: Self::Value) -> Result<(), String>;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -17,11 +68,43 @@ pub enum Node {
     EmptySlot,
 }
 
-impl Tree<NibbleKey, Vec<u8>> for Node {
+impl Tree for Node {
+    type Key = NibbleKey;
+    type Value = Vec<u8>;
+
     fn is_leaf(&self) -> bool {
         match self {
             Node::Leaf(_, _) => true,
             _ => false,
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        match self {
+            Node::EmptySlot => true,
+            _ => false,
+        }
+    }
+
+    fn children(&self) -> ChildIterator<dyn Tree<Key = NibbleKey, Value = Vec<u8>>> {
+        match self {
+            Node::EmptySlot => ChildIterator {
+                index: 0,
+                node: self,
+            },
+            Node::Leaf(_, _) => ChildIterator {
+                index: 0,
+                node: self,
+            },
+            Node::Extension(_, _) => ChildIterator {
+                index: 0,
+                node: self,
+            },
+            Node::Branch(_) => ChildIterator {
+                index: 0,
+                node: self,
+            },
+            _ => panic!("not implemented"),
         }
     }
 
@@ -909,5 +992,25 @@ mod tests {
 
         let root_hash = root.hash();
         assert_eq!(expected_root, root_hash);
+    }
+
+    #[test]
+    fn test_node_as_a_tree() {
+        let root = EmptySlot;
+        assert_eq!(root.is_empty(), true);
+        assert_eq!(root.is_leaf(), false);
+        for child in root.children() {
+            panic!("An empty slot has no child");
+        }
+
+        let root = Leaf(NibbleKey::from(vec![]), vec![]);
+        assert_eq!(root.is_empty(), false);
+        assert_eq!(root.is_leaf(), true);
+
+        let mut root = EmptySlot;
+        root.insert(&NibbleKey::from(vec![1, 2, 3, 4]), vec![0, 0]);
+        root.insert(&NibbleKey::from(vec![1, 2, 1, 2]), vec![1, 1]);
+        assert_eq!(root.is_empty(), false);
+        assert_eq!(root.is_leaf(), false);
     }
 }
