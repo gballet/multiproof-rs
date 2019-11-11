@@ -3,6 +3,11 @@ extern crate sha3;
 use super::utils::*;
 use sha3::{Digest, Keccak256};
 
+pub trait Tree<K, V> {
+    fn is_leaf(&self) -> bool;
+    fn insert(&mut self, key: &K, value: V) -> Result<(), String>;
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node {
     Hash(Vec<u8>),
@@ -10,6 +15,139 @@ pub enum Node {
     Extension(NibbleKey, Box<Node>),
     Branch(Vec<Node>),
     EmptySlot,
+}
+
+impl Tree<NibbleKey, Vec<u8>> for Node {
+    fn is_leaf(&self) -> bool {
+        match self {
+            Node::Leaf(_, _) => true,
+            _ => false,
+        }
+    }
+
+    fn insert(&mut self, key: &NibbleKey, value: Vec<u8>) -> Result<(), String> {
+        use Node::*;
+
+        if key.len() == 0 {
+            return Err("Attempted to insert a 0-byte key".to_string());
+        }
+
+        match self {
+            Leaf(leafkey, leafvalue) => {
+                // Find the common part of the current key with that of the
+                // leaf and create an intermediate full node.
+                let firstdiffindex = leafkey.factor_length(key);
+
+                // Return an error if the leaf is already present.
+                if firstdiffindex == key.len() {
+                    return Err(format!("Key is is already present!",));
+                }
+
+                // Create the new root, which is a full node.
+                let mut res = vec![EmptySlot; 16];
+                // Add the initial leaf, with a key truncated by the common
+                // key part.
+                res[leafkey[firstdiffindex] as usize] = Leaf(
+                    NibbleKey::from(leafkey[firstdiffindex + 1..].to_vec()),
+                    leafvalue.to_vec(),
+                );
+                // Add the node to be inserted
+                res[key[firstdiffindex] as usize] =
+                    Leaf(NibbleKey::from(key[firstdiffindex + 1..].to_vec()), value);
+                // Put the common part into an extension node
+                *self = if firstdiffindex == 0 {
+                    // Special case: no extension necessary
+                    Branch(res)
+                } else {
+                    Extension(
+                        NibbleKey::from(key[..firstdiffindex].to_vec()),
+                        Box::new(Branch(res)),
+                    )
+                };
+                Ok(())
+            }
+            Extension(extkey, box child) => {
+                // Find the common part of the current key with that of the
+                // extension and create an intermediate full node.
+                let firstdiffindex = extkey.factor_length(&NibbleKey::from(key.clone()));
+
+                // Special case: key is longer than the extension key:
+                // recurse on the child node.
+                if firstdiffindex == extkey.len() {
+                    child.insert(&NibbleKey::from(key[extkey.len()..].to_vec()), value)?;
+                    return Ok(());
+                }
+
+                // Special case: key is completely unlike the extension key
+                if firstdiffindex == 0 {
+                    let mut res = vec![EmptySlot; 16];
+
+                    // Create the entry for the truncated extension key
+                    // Was it an extension of 1 ? If so, place the node directly
+                    // otherwise truncate the extension.
+                    res[extkey[0] as usize] = if extkey.len() == 1 {
+                        child.clone()
+                    } else {
+                        Extension(
+                            NibbleKey::from(extkey[1..].to_vec()),
+                            Box::new(child.clone()),
+                        )
+                    };
+
+                    // Create the entry for the node. If there was only a
+                    // difference of one byte, that byte will be consumed by
+                    // the fullnode and therefore the key in the leaf will be
+                    // an empty slice `[]`.
+                    res[key[0] as usize] = Leaf(NibbleKey::from(key[1..].to_vec()), value);
+
+                    *self = Branch(res);
+                    return Ok(());
+                }
+
+                // Create the new root, which is a full node.
+                let mut res = vec![EmptySlot; 16];
+                // Add the initial leaf, with a key truncated by the common
+                // key part. If the common part corresponds to the extension
+                // key length minus one, then there is no need for the creation
+                // of an extension node past the full node.
+                res[extkey[firstdiffindex] as usize] = if extkey.len() - firstdiffindex > 1 {
+                    Extension(
+                        NibbleKey::from(extkey[firstdiffindex + 1..].to_vec()),
+                        Box::new(child.clone()),
+                    )
+                } else {
+                    child.clone()
+                };
+                // Add the node to be inserted
+                res[key[firstdiffindex] as usize] =
+                    Leaf(NibbleKey::from(key[firstdiffindex + 1..].to_vec()), value);
+                // Put the common part into an extension node
+                *self = Extension(
+                    NibbleKey::from(extkey[..firstdiffindex].to_vec()),
+                    Box::new(Branch(res)),
+                );
+                Ok(())
+            }
+            Branch(ref mut vec) => {
+                let idx = key[0] as usize;
+                // If the slot isn't yet in use, fill it, and otherwise,
+                // recurse into the child node.
+                if vec[idx] == EmptySlot {
+                    // XXX check that the value is at least 1
+                    vec[idx] = Leaf(NibbleKey::from(key[1..].to_vec()), value);
+                } else {
+                    vec[idx].insert(&NibbleKey::from(key[1..].to_vec()), value)?;
+                }
+                // Return the root node with an updated entry
+                Ok(())
+            }
+            EmptySlot => {
+                *self = Leaf(key.clone(), value);
+                Ok(())
+            }
+            _ => panic!("Can not insert a node into a hashed node"),
+        }
+    }
 }
 
 impl Default for Node {
@@ -268,6 +406,7 @@ impl Node {
 
 #[cfg(test)]
 mod tests {
+    use super::super::utils;
     use super::Node::*;
     use super::*;
 
@@ -353,5 +492,422 @@ mod tests {
                 51, 53, 12, 149, 35, 120, 93, 254, 247, 104, 88, 103, 177
             ]
         );
+    }
+
+    #[test]
+    fn insert_leaf_zero_length_key_after_fullnode() {
+        let mut root = Extension(
+            NibbleKey::from(vec![0u8; 31]),
+            Box::new(Branch(vec![
+                EmptySlot,
+                Leaf(NibbleKey::from(vec![]), vec![0u8; 32]),
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+            ])),
+        );
+        root.insert(&NibbleKey::from(vec![0u8; 32]), vec![1u8; 32])
+            .unwrap();
+        assert_eq!(
+            root,
+            Extension(
+                NibbleKey::from(vec![0u8; 31]),
+                Box::new(Branch(vec![
+                    Leaf(NibbleKey::from(vec![]), vec![1u8; 32]),
+                    Leaf(NibbleKey::from(vec![]), vec![0u8; 32]),
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot
+                ]))
+            )
+        );
+    }
+
+    #[test]
+    fn insert_leaf_into_extension_root_all_bytes_in_key_common() {
+        let mut root = Extension(
+            NibbleKey::from(vec![0xd, 0xe, 0xa, 0xd]),
+            Box::new(Leaf(NibbleKey::from(vec![0u8; 28]), vec![1u8; 32])),
+        );
+        let mut key = vec![1u8; 32];
+        key[0] = 0xd;
+        key[1] = 0xe;
+        key[2] = 0xa;
+        key[3] = 0xd;
+        root.insert(&NibbleKey::from(key), vec![2u8; 32]).unwrap();
+        assert_eq!(
+            root,
+            Extension(
+                NibbleKey::from(vec![0xd, 0xe, 0xa, 0xd]),
+                Box::new(Branch(vec![
+                    Leaf(NibbleKey::from(vec![0u8; 27]), vec![1u8; 32]),
+                    Leaf(NibbleKey::from(vec![1u8; 27]), vec![2u8; 32]),
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot
+                ]))
+            )
+        );
+    }
+
+    #[test]
+    fn insert_leaf_into_extension_root_no_common_bytes_in_key() {
+        let mut root = Extension(
+            NibbleKey::from(vec![0xd, 0xe, 0xa, 0xd]),
+            Box::new(Leaf(NibbleKey::from(vec![0u8; 24]), vec![1u8; 32])),
+        );
+        root.insert(&NibbleKey::from(vec![2u8; 32]), vec![1u8; 32])
+            .unwrap();
+        assert_eq!(
+            root,
+            Branch(vec![
+                EmptySlot,
+                EmptySlot,
+                Leaf(NibbleKey::from(vec![2u8; 31]), vec![1u8; 32]),
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                Extension(
+                    NibbleKey::from(vec![14, 10, 13]),
+                    Box::new(Leaf(NibbleKey::from(vec![0u8; 24]), vec![1u8; 32]))
+                ),
+                EmptySlot,
+                EmptySlot
+            ])
+        );
+    }
+
+    #[test]
+    fn insert_leaf_into_extension_root_half_bytes_in_key_common() {
+        let mut root = Extension(
+            NibbleKey::from(vec![0xd, 0xe, 0xa, 0xd]),
+            Box::new(Leaf(NibbleKey::from(vec![0u8; 28]), vec![1u8; 32])),
+        );
+        let mut key = vec![0u8; 32];
+        key[0] = 0xd;
+        key[1] = 0xe;
+        root.insert(&NibbleKey::from(key), vec![1u8; 32]).unwrap();
+        assert_eq!(
+            root,
+            Extension(
+                NibbleKey::from(vec![0xd, 0xe]),
+                Box::new(Branch(vec![
+                    Leaf(NibbleKey::from(vec![0u8; 29]), vec![1u8; 32]),
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    Extension(
+                        NibbleKey::from(vec![0xd]),
+                        Box::new(Leaf(NibbleKey::from(vec![0u8; 28]), vec![1u8; 32]))
+                    ),
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot
+                ]))
+            )
+        );
+    }
+
+    #[test]
+    fn insert_leaf_into_extension_root_almost_all_bytes_in_key_common() {
+        let mut root = Extension(
+            NibbleKey::from(vec![0xd, 0xe, 0xa, 0xd]),
+            Box::new(Leaf(NibbleKey::from(vec![0u8; 28]), vec![1u8; 32])),
+        );
+        let mut key = vec![0u8; 32];
+        key[0] = 0xd;
+        key[1] = 0xe;
+        key[2] = 0xa;
+        root.insert(&NibbleKey::from(key), vec![1u8; 32]).unwrap();
+        assert_eq!(
+            root,
+            Extension(
+                NibbleKey::from(vec![0xd, 0xe, 0xa]),
+                Box::new(Branch(vec![
+                    Leaf(NibbleKey::from(vec![0u8; 28]), vec![1u8; 32]),
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    Leaf(NibbleKey::from(vec![0u8; 28]), vec![1u8; 32]),
+                    EmptySlot,
+                    EmptySlot
+                ]))
+            )
+        );
+    }
+
+    #[test]
+    fn insert_leaf_into_leaf_root_common_bytes_in_key() {
+        let mut key = vec![0u8; 32];
+        for (i, v) in key.iter_mut().enumerate() {
+            if i >= 16 {
+                break;
+            }
+            *v = 2u8;
+        }
+        let mut root = Leaf(NibbleKey::from(key), vec![1u8; 32]);
+        root.insert(&NibbleKey::from(vec![2u8; 32]), vec![1u8; 32])
+            .unwrap();
+        assert_eq!(
+            root,
+            Extension(
+                NibbleKey::from(vec![2u8; 16]),
+                Box::new(Branch(vec![
+                    Leaf(NibbleKey::from(vec![0u8; 15]), vec![1u8; 32]),
+                    EmptySlot,
+                    Leaf(NibbleKey::from(vec![2u8; 15]), vec![1u8; 32]),
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot
+                ]))
+            )
+        );
+    }
+
+    #[test]
+    fn insert_leaf_into_leaf_root_no_common_bytes_in_key() {
+        let mut root = Leaf(NibbleKey::from(vec![1u8; 32]), vec![1u8; 32]);
+        root.insert(&NibbleKey::from(vec![2u8; 32]), vec![1u8; 32])
+            .unwrap();
+        assert_eq!(
+            root,
+            Branch(vec![
+                EmptySlot,
+                Leaf(NibbleKey::from(vec![1u8; 31]), vec![1u8; 32]),
+                Leaf(NibbleKey::from(vec![2u8; 31]), vec![1u8; 32]),
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot
+            ])
+        );
+    }
+
+    #[test]
+    fn insert_leaf_into_emptyslot() {
+        let mut root = Node::default();
+        assert_eq!(root, EmptySlot);
+        root.insert(&NibbleKey::from(vec![0u8; 32]), vec![1u8; 32])
+            .unwrap();
+        assert_eq!(root, Leaf(NibbleKey::from(vec![0u8; 32]), vec![1u8; 32]));
+    }
+
+    #[test]
+    fn insert_two_leaves_into_emptyslot() {
+        let mut root = Node::default();
+        assert_eq!(root, EmptySlot);
+        root.insert(&NibbleKey::from(vec![0u8; 32]), vec![1u8; 32])
+            .unwrap();
+        root.insert(&NibbleKey::from(vec![1u8; 32]), vec![1u8; 32])
+            .unwrap();
+        assert_eq!(
+            root,
+            Branch(vec![
+                Leaf(NibbleKey::from(vec![0u8; 31]), vec![1u8; 32]),
+                Leaf(NibbleKey::from(vec![1u8; 31]), vec![1u8; 32]),
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot
+            ])
+        );
+    }
+
+    #[test]
+    fn insert_leaf_into_empty_root() {
+        let children = vec![EmptySlot; 16];
+        let mut root = Branch(children);
+        root.insert(&NibbleKey::from(vec![0u8; 32]), vec![1u8; 32])
+            .unwrap();
+        assert_eq!(
+            root,
+            Branch(vec![
+                Leaf(NibbleKey::from(vec![0u8; 31]), vec![1u8; 32]),
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot
+            ])
+        );
+    }
+
+    #[test]
+    fn insert_leaf_into_two_level_fullnodes() {
+        let mut root = Branch(vec![
+            Branch(vec![EmptySlot; 16]),
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+            EmptySlot,
+        ]);
+        root.insert(&NibbleKey::from(vec![0u8; 32]), vec![1u8; 32])
+            .unwrap();
+        assert_eq!(
+            root,
+            Branch(vec![
+                Branch(vec![
+                    Leaf(NibbleKey::from(vec![0u8; 30]), vec![1u8; 32]),
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot,
+                    EmptySlot
+                ]),
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot,
+                EmptySlot
+            ])
+        );
+    }
+
+    #[test]
+    fn insert_leaf_two_embedded_nodes() {
+        let expected_root =
+            hex::decode(&"0x1e1f73cc50d595585797d261df5be9bf69037a57e6470c9e4ffc87b6221ab67a"[2..])
+                .unwrap();
+        let inputs = [
+            ("0x1111111111111111111111111111111111111111", "0xffff"),
+            ("0x2222222222222222222222222222222222222222", "0xeeee"),
+        ];
+
+        let mut root = Branch(vec![EmptySlot; 16]);
+        for (ik, iv) in inputs.iter() {
+            let k = NibbleKey::from(utils::ByteKey(hex::decode(&ik[2..]).unwrap()));
+            let v = hex::decode(&iv[2..]).unwrap();
+            root.insert(&k, v).unwrap();
+        }
+
+        let root_hash = root.hash();
+        assert_eq!(expected_root, root_hash);
     }
 }
