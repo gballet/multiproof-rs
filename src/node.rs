@@ -3,12 +3,12 @@ extern crate sha3;
 use super::utils::*;
 use sha3::{Digest, Keccak256};
 
-pub struct ChildIterator<'a, T: Tree + ?Sized> {
+pub struct NodeChildIterator<'a> {
     index: usize,
-    node: &'a T,
+    node: &'a Node,
 }
 
-impl<'a> std::iter::Iterator for ChildIterator<'a, Node> {
+impl<'a> std::iter::Iterator for NodeChildIterator<'a> {
     type Item = Node;
 
     #[inline]
@@ -55,7 +55,8 @@ pub trait Tree {
     type Value;
     fn is_leaf(&self) -> bool;
     fn is_empty(&self) -> bool;
-    fn children(&self) -> ChildIterator<dyn Tree<Key = Self::Key, Value = Self::Value>>;
+    //fn children(&self) -> ChildIterator<dyn Tree<Key = Self::Key, Value = Self::Value>>;
+    fn children(&self) -> dyn Iterator<Item = Self>;
     fn insert(&mut self, key: &Self::Key, value: Self::Value) -> Result<(), String>;
 }
 
@@ -86,21 +87,21 @@ impl Tree for Node {
         }
     }
 
-    fn children(&self) -> ChildIterator<dyn Tree<Key = NibbleKey, Value = Vec<u8>>> {
+    fn children(&self) -> dyn Iterator<Item = Node> {
         match self {
-            Node::EmptySlot => ChildIterator {
+            Node::EmptySlot => NodeChildIterator {
                 index: 0,
                 node: self,
             },
-            Node::Leaf(_, _) => ChildIterator {
+            Node::Leaf(_, _) => NodeChildIterator {
                 index: 0,
                 node: self,
             },
-            Node::Extension(_, _) => ChildIterator {
+            Node::Extension(_, _) => NodeChildIterator {
                 index: 0,
                 node: self,
             },
-            Node::Branch(_) => ChildIterator {
+            Node::Branch(_) => NodeChildIterator {
                 index: 0,
                 node: self,
             },
