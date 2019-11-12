@@ -1,38 +1,8 @@
 extern crate sha3;
 
+use super::tree::*;
 use super::utils::*;
 use sha3::{Digest, Keccak256};
-
-pub struct NodeChildIterator<'a, K, V> {
-    index: usize,
-    node: &'a dyn Tree<Key = K, Value = V>,
-}
-
-impl<'a> std::iter::Iterator for NodeChildIterator<'a, NibbleKey, Vec<u8>> {
-    type Item = &'a dyn Tree<Key = NibbleKey, Value = Vec<u8>>;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index < self.node.num_children() {
-            self.index += 1;
-            self.node.ith_child(self.index - 1)
-        } else {
-            None
-        }
-    }
-}
-
-pub trait Tree {
-    type Key;
-    type Value;
-
-    fn is_leaf(&self) -> bool;
-    fn is_empty(&self) -> bool;
-    fn num_children(&self) -> usize;
-    fn ith_child(&self, index: usize) -> Option<&dyn Tree<Key = Self::Key, Value = Self::Value>>;
-    fn children(&self) -> NodeChildIterator<Self::Key, Self::Value>;
-    fn insert(&mut self, key: &Self::Key, value: Self::Value) -> Result<(), String>;
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node {
@@ -61,14 +31,20 @@ impl Tree for Node {
         }
     }
 
+    /// Returns the *maximum* child count of the tree's root.
+    ///
+    /// Branch nodes will always report 16, as empty slots are counted as children.
     fn num_children(&self) -> usize {
         match self {
             Node::EmptySlot | Node::Leaf(_, _) | Node::Hash(_) => 0usize,
             Node::Extension(_, _) => 1usize,
-            Node::Branch(ref vec) => vec.iter().filter(|&x| *x != Node::EmptySlot).count(),
+            Node::Branch(_) => 16usize,
         }
     }
 
+    /// Return the tree root's *ith* child.
+    ///
+    /// The function will return `EmptySlot` instead of `None` if a branch node has no *ith* child.
     fn ith_child(&self, index: usize) -> Option<&dyn Tree<Key = Self::Key, Value = Self::Value>> {
         if index >= self.num_children() {
             panic!(format!(
@@ -1027,6 +1003,6 @@ mod tests {
             .unwrap();
         assert_eq!(root.is_empty(), false);
         assert_eq!(root.is_leaf(), false);
-        assert_eq!(root.children().count(), 2);
+        assert_eq!(root.children().count(), 16);
     }
 }

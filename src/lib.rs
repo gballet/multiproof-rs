@@ -6,6 +6,7 @@ extern crate sha3;
 pub mod instruction;
 pub mod multiproof;
 pub mod node;
+pub mod tree;
 pub mod utils;
 
 use instruction::*;
