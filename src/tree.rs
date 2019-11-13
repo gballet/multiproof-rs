@@ -22,6 +22,7 @@ pub trait Tree {
     fn ith_child(&self, index: usize) -> Option<&dyn Tree<Key = Self::Key, Value = Self::Value>>;
     /// Returns an iterator to the node's children. Some of these nodes can be empty.
     fn children(&self) -> NodeChildIterator<Self::Key, Self::Value>;
+    /// Insert a `(key,value)` pair into a (sub-)tree represented by `root`.
     fn insert(&mut self, key: &Self::Key, value: Self::Value) -> Result<(), String>;
 }
 
