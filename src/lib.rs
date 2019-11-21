@@ -284,7 +284,7 @@ mod tests {
             keyvals: proof.keyvals,
             instructions: proof.instructions,
         };
-        let new_root = rebuild(&proof).unwrap();
+        let new_root: Node = proof.rebuild().unwrap();
 
         assert_eq!(
             new_root,
@@ -432,9 +432,9 @@ mod tests {
 
         let proof = make_multiproof(&root, vec![NibbleKey::from(vec![2u8; 32])]).unwrap();
 
-        let res = proof.rebuild();
+        let res: Node = proof.rebuild().unwrap();
 
-        assert_eq!(res.unwrap().hash(), pre_root_hash);
+        assert_eq!(res.hash(), pre_root_hash);
     }
 
     #[test]
@@ -461,9 +461,9 @@ mod tests {
         ];
         let proof = make_multiproof(&root, keys).unwrap();
 
-        let res = proof.rebuild();
+        let res: Node = proof.rebuild().unwrap();
 
-        assert_eq!(res.unwrap().hash(), pre_root_hash);
+        assert_eq!(res.hash(), pre_root_hash);
     }
 
     #[test]
@@ -524,7 +524,7 @@ mod tests {
             ])],
             instructions: vec![LEAF(0)],
         };
-        let out = proof.rebuild().unwrap();
+        let out: Node = proof.rebuild().unwrap();
         assert_eq!(out, Leaf(NibbleKey::from(vec![]), vec![4, 5, 6]))
     }
 
@@ -538,7 +538,7 @@ mod tests {
             ])],
             instructions: vec![LEAF(0), BRANCH(0)],
         };
-        let out = proof.rebuild().unwrap();
+        let out: Node = proof.rebuild().unwrap();
         assert_eq!(
             out,
             Branch(vec![
@@ -572,7 +572,7 @@ mod tests {
             ],
             instructions: vec![LEAF(0), BRANCH(0), LEAF(1), ADD(2)],
         };
-        let out = proof.rebuild().unwrap();
+        let out: Node = proof.rebuild().unwrap();
         assert_eq!(
             out,
             Branch(vec![
@@ -612,7 +612,7 @@ mod tests {
                 rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![7, 8, 9], vec![10, 11, 12]]),
             ],
         };
-        let out = proof.rebuild().unwrap();
+        let out: Node = proof.rebuild().unwrap();
         assert_eq!(
             out,
             Extension(
@@ -695,7 +695,7 @@ mod tests {
         );
         assert_eq!(proof.instructions.len(), 4);
 
-        let rebuilt = proof.rebuild().unwrap();
+        let rebuilt: Node = proof.rebuild().unwrap();
         assert_eq!(
             rebuilt,
             Branch(vec![
@@ -760,7 +760,7 @@ mod tests {
         assert_eq!(proof.keyvals.len(), 0);
         assert_eq!(proof.instructions.len(), 2);
 
-        let rebuilt = proof.rebuild().unwrap();
+        let rebuilt: Node = proof.rebuild().unwrap();
         assert_eq!(
             rebuilt,
             Extension(
@@ -806,7 +806,7 @@ mod tests {
         assert_eq!(proof.keyvals.len(), 1);
         assert_eq!(proof.instructions.len(), 6);
 
-        let rebuilt = proof.rebuild().unwrap();
+        let rebuilt: Node = proof.rebuild().unwrap();
         assert_eq!(
             rebuilt,
             Branch(vec![
@@ -843,7 +843,7 @@ mod tests {
         let missing_key = NibbleKey::from(vec![2u8; 32]);
 
         let proof = make_multiproof(&root, vec![missing_key.clone()]).unwrap();
-        let rebuilt = proof.rebuild().unwrap();
+        let rebuilt: Node = proof.rebuild().unwrap();
         assert!(!rebuilt.is_key_present(&missing_key));
     }
 
