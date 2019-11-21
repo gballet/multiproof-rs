@@ -12,103 +12,100 @@ pub mod utils;
 use instruction::*;
 use multiproof::*;
 use node::*;
+use tree::{KeyValueStore, Tree};
 use utils::*;
 
-// Rebuilds the tree based on the multiproof components
-pub fn rebuild(proof: &Multiproof) -> Result<Node, String> {
-    use Instruction::*;
-    use Node::*;
+impl<S: KeyValueStore, T: Tree<S> + rlp::Decodable> ProofToTree<S, T> for Multiproof {
+    fn rebuild(&self) -> Result<T, String> {
+        use Instruction::*;
 
-    let mut hiter = proof.hashes.iter();
-    let iiter = proof.instructions.iter();
-    let mut kviter = proof.keyvals.iter().map(|encoded| {
-        // Deserialize the keys as they are read
-        rlp::decode::<Node>(encoded).unwrap()
-    });
+        let mut hiter = self.hashes.iter();
+        let iiter = self.instructions.iter();
+        let mut kviter = self.keyvals.iter().map(|encoded| {
+            // Deserialize the keys as they are read
+            rlp::decode::<T>(encoded).unwrap()
+        });
 
-    let mut stack = Vec::<Node>::new();
+        let mut stack = Vec::<T>::new();
 
-    for instr in iiter {
-        match instr {
-            HASHER => {
-                if let Some(h) = hiter.next() {
-                    stack.push(Hash(h.to_vec()));
-                } else {
-                    return Err(format!("Proof requires one more hash in HASHER"));
-                }
-            }
-            LEAF(keylength) => {
-                if let Some(Leaf(key, value)) = kviter.next() {
-                    // If the value is empty, we have a NULL key and
-                    // therefore an EmptySlot should be returned.
-                    if value.len() != 0 {
-                        stack.push(Leaf(
-                            NibbleKey::from(key[key.len() - *keylength..].to_vec()),
-                            value.to_vec(),
-                        ));
+        for instr in iiter {
+            match instr {
+                HASHER => {
+                    if let Some(h) = hiter.next() {
+                        stack.push(T::from_hash(h.to_vec()));
                     } else {
-                        stack.push(EmptySlot);
+                        return Err(format!("Proof requires one more hash in HASHER"));
                     }
-                } else {
-                    return Err(format!(
-                        "Proof requires one more (key,value) pair in LEAF({})",
-                        keylength
-                    ));
                 }
-            }
-            BRANCH(digit) => {
-                if let Some(node) = stack.pop() {
-                    let mut children = vec![Node::EmptySlot; 16];
-                    children[*digit] = node;
-                    stack.push(Branch(children))
-                } else {
-                    return Err(format!(
-                        "Could not pop a value from the stack, that is required for a BRANCH({})",
-                        digit
-                    ));
+                LEAF(keylength) => {
+                    if let Some(leaf) = kviter.next() {
+                        // If the value is empty, we have a NULL key and
+                        // therefore an EmptySlot should be returned.
+                        match leaf.value() {
+                            None => stack.push(T::new_empty()),
+                            Some(_) if leaf.value_length().unwrap() == 0usize => {
+                                stack.push(T::new_empty())
+                            }
+                            Some(_) => stack.push(leaf),
+                        }
+                    } else {
+                        return Err(format!(
+                            "Proof requires one more (key,value) pair in LEAF({})",
+                            keylength
+                        ));
+                    }
                 }
-            }
-            EXTENSION(key) => {
-                if let Some(node) = stack.pop() {
-                    stack.push(Extension(NibbleKey::from(key.to_vec()), Box::new(node)));
-                } else {
-                    return Err(format!(
-                        "Could not find a node on the stack, that is required for an EXTENSION({:?})",
-                        key
-                    ));
+                BRANCH(digit) => {
+                    if let Some(ref node) = stack.pop() {
+                        let mut b = T::new_branch();
+                        b.set_ith_child(*digit, node);
+                        stack.push(b)
+                    } else {
+                        return Err(format!(
+                "Could not pop a value from the stack, that is required for a BRANCH({})",
+                digit
+                ));
+                    }
                 }
-            }
-            ADD(digit) => {
-                if let (Some(el1), Some(el2)) = (stack.pop(), stack.last_mut()) {
-                    match el2 {
-                        Branch(ref mut n2) => {
-                            if *digit >= n2.len() {
+                EXTENSION(key) => {
+                    if let Some(node) = stack.pop() {
+                        stack.push(T::new_extension(key.to_vec(), /*Box::new(node)*/ node));
+                    } else {
+                        return Err(format!(
+                "Could not find a node on the stack, that is required for an EXTENSION({:?})",
+                key
+                ));
+                    }
+                }
+                ADD(digit) => {
+                    if let (Some(el1), Some(el2)) = (stack.pop(), stack.last_mut()) {
+                        // Only true if this is a branch node
+                        if el2.num_children() > 1 {
+                            if *digit >= el2.num_children() {
                                 return Err(format!(
                                     "Incorrect full node index: {} > {}",
                                     digit,
-                                    n2.len() - 1
+                                    el2.num_children()
                                 ));
                             }
 
-                            // A hash needs to be fed into the hash sponge, any other node is simply
-                            // a child (el1) of the parent node (el2). this is done during resolve.
-                            n2[*digit] = el1;
+                            // Any node is simply a child (el1) of the parent node (el2). This is done
+                            // during resolve.
+                            el2.set_ith_child(*digit, &el1);
+                        } else {
+                            return Err(String::from("Could not find enough parameters to ADD"));
                         }
-                        Hash(_) => {
-                            return Err(String::from("Hash node no longer supported in this case"));
-                        }
-                        _ => return Err(String::from("Unexpected node type")),
+                    } else {
+                        return Err(String::from("Could not find enough parameters to ADD"));
                     }
-                } else {
-                    return Err(String::from("Could not find enough parameters to ADD"));
                 }
             }
         }
-    }
 
-    stack
-        .pop()
-        .ok_or(String::from("Stack underflow, expected root node"))
+        stack
+            .pop()
+            .ok_or(String::from("Stack underflow, expected root node"))
+    }
 }
 
 // Helper function that generates a multiproof based on one `(key.value)`
@@ -435,7 +432,7 @@ mod tests {
 
         let proof = make_multiproof(&root, vec![NibbleKey::from(vec![2u8; 32])]).unwrap();
 
-        let res = rebuild(&proof);
+        let res = proof.rebuild();
 
         assert_eq!(res.unwrap().hash(), pre_root_hash);
     }
@@ -464,7 +461,7 @@ mod tests {
         ];
         let proof = make_multiproof(&root, keys).unwrap();
 
-        let res = rebuild(&proof);
+        let res = proof.rebuild();
 
         assert_eq!(res.unwrap().hash(), pre_root_hash);
     }
@@ -527,7 +524,7 @@ mod tests {
             ])],
             instructions: vec![LEAF(0)],
         };
-        let out = rebuild(&proof).unwrap();
+        let out = proof.rebuild().unwrap();
         assert_eq!(out, Leaf(NibbleKey::from(vec![]), vec![4, 5, 6]))
     }
 
@@ -541,7 +538,7 @@ mod tests {
             ])],
             instructions: vec![LEAF(0), BRANCH(0)],
         };
-        let out = rebuild(&proof).unwrap();
+        let out = proof.rebuild().unwrap();
         assert_eq!(
             out,
             Branch(vec![
@@ -575,7 +572,7 @@ mod tests {
             ],
             instructions: vec![LEAF(0), BRANCH(0), LEAF(1), ADD(2)],
         };
-        let out = rebuild(&proof).unwrap();
+        let out = proof.rebuild().unwrap();
         assert_eq!(
             out,
             Branch(vec![
@@ -615,7 +612,7 @@ mod tests {
                 rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![7, 8, 9], vec![10, 11, 12]]),
             ],
         };
-        let out = rebuild(&proof).unwrap();
+        let out = proof.rebuild().unwrap();
         assert_eq!(
             out,
             Extension(
@@ -661,9 +658,9 @@ mod tests {
 
         // RLP roundtrip
         let proof_rlp = rlp::encode(&proof);
-        let proof = rlp::decode(&proof_rlp).unwrap();
+        let proof: Multiproof = rlp::decode(&proof_rlp).unwrap();
 
-        let rebuilt_root = rebuild(&proof).unwrap();
+        let rebuilt_root = proof.rebuild().unwrap();
         assert_eq!(tree_root, rebuilt_root);
     }
 
@@ -698,7 +695,7 @@ mod tests {
         );
         assert_eq!(proof.instructions.len(), 4);
 
-        let rebuilt = rebuild(&proof).unwrap();
+        let rebuilt = proof.rebuild().unwrap();
         assert_eq!(
             rebuilt,
             Branch(vec![
@@ -763,7 +760,7 @@ mod tests {
         assert_eq!(proof.keyvals.len(), 0);
         assert_eq!(proof.instructions.len(), 2);
 
-        let rebuilt = rebuild(&proof).unwrap();
+        let rebuilt = proof.rebuild().unwrap();
         assert_eq!(
             rebuilt,
             Extension(
@@ -809,7 +806,7 @@ mod tests {
         assert_eq!(proof.keyvals.len(), 1);
         assert_eq!(proof.instructions.len(), 6);
 
-        let rebuilt = rebuild(&proof).unwrap();
+        let rebuilt = proof.rebuild().unwrap();
         assert_eq!(
             rebuilt,
             Branch(vec![
@@ -846,7 +843,7 @@ mod tests {
         let missing_key = NibbleKey::from(vec![2u8; 32]);
 
         let proof = make_multiproof(&root, vec![missing_key.clone()]).unwrap();
-        let rebuilt = rebuild(&proof).unwrap();
+        let rebuilt = proof.rebuild().unwrap();
         assert!(!rebuilt.is_key_present(&missing_key));
     }
 

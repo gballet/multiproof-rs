@@ -13,10 +13,12 @@ pub enum Node {
     EmptySlot,
 }
 
-impl Tree for Node {
+impl KeyValueStore for Node {
     type Key = NibbleKey;
     type Value = Vec<u8>;
+}
 
+impl Tree<Node> for Node {
     fn is_leaf(&self) -> bool {
         match self {
             Node::Leaf(_, _) => true,
@@ -45,7 +47,7 @@ impl Tree for Node {
     /// Return the tree root's *ith* child.
     ///
     /// The function will return `EmptySlot` instead of `None` if a branch node has no *ith* child.
-    fn ith_child(&self, index: usize) -> Option<&dyn Tree<Key = Self::Key, Value = Self::Value>> {
+    fn ith_child(&self, index: usize) -> Option<&Self> {
         if index >= self.num_children() {
             panic!(format!(
                 "Requested child #{}, only have #{}",
@@ -55,33 +57,38 @@ impl Tree for Node {
         }
 
         match self {
-            Node::EmptySlot | Node::Leaf(_, _) | Node::Hash(_) => {
-                None as Option<&dyn Tree<Key = Self::Key, Value = Self::Value>>
-            }
+            Node::EmptySlot | Node::Leaf(_, _) | Node::Hash(_) => None,
             Node::Extension(_, box ext) => Some(&*ext),
             Node::Branch(ref vec) => Some(&vec[index]),
         }
     }
 
-    fn children(&self) -> NodeChildIterator<Self::Key, Self::Value> {
-        match self {
-            Node::EmptySlot => NodeChildIterator {
-                index: 0,
-                node: self,
-            },
-            Node::Leaf(_, _) => NodeChildIterator {
-                index: 0,
-                node: self,
-            },
-            Node::Extension(_, _) => NodeChildIterator {
-                index: 0,
-                node: self,
-            },
-            Node::Branch(_) => NodeChildIterator {
-                index: 0,
-                node: self,
-            },
-            _ => panic!("not implemented"),
+    fn set_ith_child(&mut self, index: usize, child: &Self) {
+        if index >= self.num_children() {
+            panic!(format!(
+                "Requested child #{}, only have #{}",
+                index,
+                self.num_children()
+            ));
+        }
+
+        if let Node::Branch(ref mut vec) = self {
+            if let Node::EmptySlot = &vec[index] {
+                // NOTE attempt to use pointers instead of cloning
+                vec[index] = child.clone();
+            } else {
+                panic!("Refusing to overwrite child node");
+            }
+        } else {
+            panic!("Only branch nodes can be set in this implementation.");
+        }
+    }
+
+    fn children(&self) -> NodeChildIterator<Self, Self> {
+        NodeChildIterator {
+            index: 0,
+            key: None,
+            node: &self,
         }
     }
 
@@ -207,6 +214,40 @@ impl Tree for Node {
             }
             _ => panic!("Can not insert a node into a hashed node"),
         }
+    }
+
+    fn value(&self) -> Option<&Vec<u8>> {
+        match self {
+            Node::Leaf(_, ref v) => Some(v),
+            _ => None,
+        }
+    }
+
+    fn value_length(&self) -> Option<usize> {
+        match self {
+            Node::Leaf(_, ref v) => Some(v.len()),
+            _ => None,
+        }
+    }
+
+    fn from_hash(h: Vec<u8>) -> Self {
+        Node::Hash(h.to_vec())
+    }
+
+    fn new_extension(ext: Vec<u8>, child: Self) -> Self {
+        Node::Extension(NibbleKey::from(ext), Box::new(child))
+    }
+
+    fn new_branch() -> Self {
+        Node::Branch(vec![Node::EmptySlot; 16])
+    }
+
+    fn new_leaf(key: Vec<u8>, value: Vec<u8>) -> Self {
+        Node::Leaf(NibbleKey::from(key), value)
+    }
+
+    fn new_empty() -> Self {
+        Node::EmptySlot
     }
 }
 
