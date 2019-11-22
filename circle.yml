@@ -12,12 +12,13 @@ jobs:
              rustup toolchain install nightly-2019-09-05
              rustup default nightly-2019-09-05
              rustup component add rustfmt
+             rustup component add clippy
              rustup update
       - run:
            name: Linter
            command: |
-             rustfmt --version
              cargo fmt --all -- --check
+             cargo clippy -- -D warnings
       - run:
           name: Build
           command: cargo build
