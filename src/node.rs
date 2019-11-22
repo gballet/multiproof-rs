@@ -299,9 +299,7 @@ impl rlp::Decodable for Node {
             return Err(rlp::DecoderError::RlpExpectedToBeList);
         }
         let keyval = rlp.as_list::<Vec<u8>>()?;
-        let key_bytes = ByteKey(keyval[0].clone());
-        let key_nibbles = NibbleKey::from(key_bytes);
-        // TODO: remove indicator prefix if node is a leaf or extension
+        let key_nibbles = NibbleKey::remove_hex_prefix(&keyval[0]);
         Ok(Node::Leaf(key_nibbles, keyval[1].clone()))
     }
 }

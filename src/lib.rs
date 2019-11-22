@@ -43,10 +43,13 @@ impl<S: KeyValueStore, T: Tree<S> + rlp::Decodable> ProofToTree<S, T> for Multip
                         // therefore an EmptySlot should be returned.
                         match leaf.value() {
                             None => stack.push(T::new_empty()),
-                            Some(_) if leaf.value_length().unwrap() == 0usize => {
-                                stack.push(T::new_empty())
+                            Some(_) => {
+                                if leaf.value_length().unwrap() == 0usize {
+                                    stack.push(T::new_empty())
+                                } else {
+                                    stack.push(leaf)
+                                }
                             }
-                            Some(_) => stack.push(leaf),
                         }
                     } else {
                         return Err(format!(
@@ -69,7 +72,7 @@ impl<S: KeyValueStore, T: Tree<S> + rlp::Decodable> ProofToTree<S, T> for Multip
                 }
                 EXTENSION(key) => {
                     if let Some(node) = stack.pop() {
-                        stack.push(T::new_extension(key.to_vec(), /*Box::new(node)*/ node));
+                        stack.push(T::new_extension(key.to_vec(), node));
                     } else {
                         return Err(format!(
                 "Could not find a node on the stack, that is required for an EXTENSION({:?})",
@@ -519,7 +522,7 @@ mod tests {
         let proof = Multiproof {
             hashes: vec![],
             keyvals: vec![rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![
-                vec![1, 2, 3],
+                vec![],
                 vec![4, 5, 6],
             ])],
             instructions: vec![LEAF(0)],
@@ -533,7 +536,7 @@ mod tests {
         let proof = Multiproof {
             hashes: vec![],
             keyvals: vec![rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![
-                vec![1, 2, 3],
+                vec![],
                 vec![4, 5, 6],
             ])],
             instructions: vec![LEAF(0), BRANCH(0)],
@@ -567,8 +570,8 @@ mod tests {
         let proof = Multiproof {
             hashes: vec![],
             keyvals: vec![
-                rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![1, 2, 3], vec![4, 5, 6]]),
-                rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![7, 8, 9], vec![10, 11, 12]]),
+                rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![], vec![4, 5, 6]]),
+                rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![25], vec![10, 11, 12]]),
             ],
             instructions: vec![LEAF(0), BRANCH(0), LEAF(1), ADD(2)],
         };
@@ -608,8 +611,8 @@ mod tests {
                 EXTENSION(vec![13, 14, 15]),
             ],
             keyvals: vec![
-                rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![1, 2, 3], vec![4, 5, 6]]),
-                rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![7, 8, 9], vec![10, 11, 12]]),
+                rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![], vec![4, 5, 6]]),
+                rlp::encode_list::<Vec<u8>, Vec<u8>>(&vec![vec![25], vec![10, 11, 12]]),
             ],
         };
         let out: Node = proof.rebuild().unwrap();
