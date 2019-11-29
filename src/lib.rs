@@ -9,7 +9,7 @@ pub mod node;
 pub mod utils;
 
 use instruction::*;
-use multiproof::*;
+pub use multiproof::*;
 use node::*;
 use utils::*;
 
