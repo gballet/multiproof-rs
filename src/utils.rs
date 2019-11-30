@@ -88,7 +88,7 @@ impl NibbleKey {
     }
 
     pub fn remove_hex_prefix(payload: &Vec<u8>) -> NibbleKey {
-        if payload.len() == 0 {
+        if payload.is_empty() {
             return NibbleKey(payload.clone());
         }
         match payload[0] {
