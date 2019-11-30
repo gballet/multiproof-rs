@@ -1,4 +1,10 @@
 use super::instruction::*;
+use super::tree::{KeyValueStore, Tree};
+
+pub trait ProofToTree<S: KeyValueStore, T: Tree<S>> {
+    /// Rebuilds a tree of type `T` based on the proof's components.
+    fn rebuild(&self) -> Result<T, String>;
+}
 
 #[derive(Debug, PartialEq)]
 pub struct Multiproof {

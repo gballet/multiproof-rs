@@ -86,6 +86,33 @@ impl NibbleKey {
 
         output
     }
+
+    pub fn remove_hex_prefix(payload: &Vec<u8>) -> NibbleKey {
+        if payload.len() == 0 {
+            return NibbleKey(payload.clone());
+        }
+        match payload[0] {
+            x if x & 16 == 16 => {
+                // Odd payload.len()
+                let mut out = vec![0u8; (payload.len() - 1) * 2 + 1];
+                out[0] = x & 0xF;
+                for i in 1..payload.len() {
+                    out[2 * i - 1] = payload[i] >> 4;
+                    out[2 * i] = payload[i] & 0xF;
+                }
+                NibbleKey(out)
+            }
+            _ => {
+                // Even payload.len()
+                let mut out = vec![0u8; (payload.len() - 1) * 2];
+                for i in 1..payload.len() {
+                    out[2 * (i - 1)] = payload[i - 1] & 0xF;
+                    out[2 * (i - 1) + 1] = payload[i] >> 4;
+                }
+                NibbleKey(out)
+            }
+        }
+    }
 }
 
 impl rlp::Encodable for NibbleKey {
