@@ -284,7 +284,7 @@ impl rlp::Encodable for Node {
                 }
                 // 17th element
                 stream.append(&"");
-                stream.complete_unbounded_list();
+                stream.finalize_unbounded_list();
                 let encoding = stream.out();
                 s.append_raw(&encoding, encoding.len());
             }

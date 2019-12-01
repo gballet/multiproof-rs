@@ -3,11 +3,15 @@ name = "multiproof-rs"
 version = "0.1.0"
 authors = ["Guillaume Ballet <gballet@gmail.com>"]
 edition = "2018"
+license = "Apache-2.0"
+description = "Rust implementation of @ledgerwatch's multiproof algorithm"
+repository = "https://github.com/gballet/multiproof-rs"
+homepage = "https://github.com/gballet/multiproof-rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 sha3 = "0.8.2"
-rlp = "0.4.2"
+rlp = "0.4.4"
 hex = "0.4.0"
 serde_json = "1.0.40"
