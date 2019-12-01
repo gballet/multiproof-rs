@@ -34,7 +34,7 @@ impl<S: KeyValueStore, T: Tree<S> + rlp::Decodable> ProofToTree<S, T> for Multip
                     if let Some(h) = hiter.next() {
                         stack.push(T::from_hash(h.to_vec()));
                     } else {
-                        return Err(format!("Proof requires one more hash in HASHER"));
+                        return Err("Proof requires one more hash in HASHER".to_string());
                     }
                 }
                 LEAF(keylength) => {
@@ -107,7 +107,7 @@ impl<S: KeyValueStore, T: Tree<S> + rlp::Decodable> ProofToTree<S, T> for Multip
 
         stack
             .pop()
-            .ok_or(String::from("Stack underflow, expected root node"))
+            .ok_or_else(|| "Stack underflow, expected root node".to_string())
     }
 }
 
@@ -122,7 +122,7 @@ pub fn make_multiproof(root: &Node, keys: Vec<NibbleKey>) -> Result<Multiproof, 
 
     // If there are no keys specified at this node, then just hash that
     // node.
-    if keys.len() == 0 {
+    if keys.is_empty() {
         return Ok(Multiproof {
             instructions: vec![Instruction::HASHER],
             hashes: vec![root.hash()],
@@ -159,7 +159,7 @@ pub fn make_multiproof(root: &Node, keys: Vec<NibbleKey>) -> Result<Multiproof, 
             for (selector, subkeys) in dispatch.iter().enumerate() {
                 // Does the child have any key? If not, it will be hashed
                 // and a `HASHER` instruction will be added to the list.
-                if dispatch[selector].len() == 0 {
+                if dispatch[selector].is_empty() {
                     // Empty slots are not to be hashed
                     if vec[selector] != EmptySlot {
                         instructions.push(Instruction::HASHER);
@@ -194,8 +194,7 @@ pub fn make_multiproof(root: &Node, keys: Vec<NibbleKey>) -> Result<Multiproof, 
                     "Expecting exactly 1 key in leaf, got {}: {:?}",
                     keys.len(),
                     keys
-                )
-                .to_string());
+                ));
             }
 
             // Here two things can happen:
@@ -228,7 +227,7 @@ pub fn make_multiproof(root: &Node, keys: Vec<NibbleKey>) -> Result<Multiproof, 
             // then recurse on it, and ignore all nonexistent key, as the
             // presence of existing keys prove that those missing are not
             // present in the tree.
-            if truncated.len() > 0 {
+            if !truncated.is_empty() {
                 let mut proof = make_multiproof(child, truncated)?;
                 hashes.append(&mut proof.hashes);
                 instructions.append(&mut proof.instructions);
@@ -249,8 +248,8 @@ pub fn make_multiproof(root: &Node, keys: Vec<NibbleKey>) -> Result<Multiproof, 
     }
 
     Ok(Multiproof {
-        instructions: instructions,
-        hashes: hashes,
+        instructions,
+        hashes,
         keyvals: values,
     })
 }

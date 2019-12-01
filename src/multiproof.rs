@@ -28,26 +28,26 @@ impl rlp::Decodable for Multiproof {
         let keyvals: Vec<Vec<u8>> = rlp.list_at(1usize)?;
         let instructions: Vec<Instruction> = rlp.list_at(2usize)?;
         Ok(Multiproof {
-            hashes: hashes,
-            instructions: instructions,
-            keyvals: keyvals,
+            hashes,
+            instructions,
+            keyvals,
         })
     }
 }
 
 impl std::fmt::Display for Multiproof {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "instructions:\n")?;
+        writeln!(f, "instructions:")?;
         for i in self.instructions.iter() {
-            write!(f, "\t{:?}\n", i)?;
+            writeln!(f, "\t{:?}", i)?;
         }
-        write!(f, "keyvals:\n")?;
+        writeln!(f, "keyvals:")?;
         for kv in self.keyvals.iter() {
-            write!(f, "\t{:?}\n", hex::encode(kv))?;
+            writeln!(f, "\t{:?}", hex::encode(kv))?;
         }
-        write!(f, "hashes:\n")?;
+        writeln!(f, "hashes:")?;
         for h in self.hashes.iter() {
-            write!(f, "\t{}\n", hex::encode(h))?;
+            writeln!(f, "\t{}", hex::encode(h))?;
         }
         Ok(())
     }
