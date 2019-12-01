@@ -95,7 +95,7 @@ impl Tree<Node> for Node {
     fn insert(&mut self, key: &NibbleKey, value: Vec<u8>) -> Result<(), String> {
         use Node::*;
 
-        if key.len() == 0 {
+        if key.is_empty() {
             return Err("Attempted to insert a 0-byte key".to_string());
         }
 
@@ -136,7 +136,7 @@ impl Tree<Node> for Node {
             Extension(extkey, box child) => {
                 // Find the common part of the current key with that of the
                 // extension and create an intermediate full node.
-                let firstdiffindex = extkey.factor_length(&NibbleKey::from(key.clone()));
+                let firstdiffindex = extkey.factor_length(&key.clone());
 
                 // Special case: key is longer than the extension key:
                 // recurse on the child node.
@@ -276,7 +276,7 @@ impl rlp::Encodable for Node {
                 stream.begin_unbounded_list();
                 for node in nodes {
                     let hash = node.composition();
-                    if hash.len() < 32 && hash.is_empty() {
+                    if hash.len() < 32 && !hash.is_empty() {
                         stream.append_raw(&hash, hash.len());
                     } else {
                         stream.append(&hash);
@@ -311,7 +311,7 @@ impl std::ops::Index<&NibbleKey> for Node {
     fn index(&self, k: &NibbleKey) -> &Node {
         // If the key has 0-length, then the search is over and
         // the current node is returned.
-        if k.len() == 0 {
+        if k.is_empty() {
             self
         } else {
             match self {
@@ -389,13 +389,12 @@ impl Node {
                 )
             }
             Node::Branch(ref subnodes) => {
-                let name = format!("branch{}", hex::encode(pref.clone()));
+                let name = format!("branch{}", hex::encode(pref));
                 let mut label = String::from("");
                 for i in 0..15 {
                     label.push_str(&format!("<td port=\"{}\">{:x}</td>", i, i));
                 }
-                println!("{:?}", hex::encode(pref.clone()));
-                let mut refs = if prefix.len() > 0 {
+                let mut refs = if !prefix.is_empty() {
                     vec![format!("{} -> {}", root, name)]
                 } else {
                     Vec::new()
@@ -415,8 +414,8 @@ impl Node {
                 (nodes, refs)
             }
             Node::Extension(ref ext, ref subnode) => {
-                let name = format!("extension{}", hex::encode(pref.clone()));
-                let mut subkey: Vec<u8> = prefix.clone().into();
+                let name = format!("extension{}", hex::encode(pref));
+                let mut subkey: Vec<u8> = prefix.into();
                 subkey.extend_from_slice(&ext[0..]);
                 let (mut sn, mut sr) = Node::graphviz_rec(
                     subnode,
@@ -428,8 +427,8 @@ impl Node {
                 (sn, sr)
             }
             Node::Hash(_) => {
-                let name = format!("hash{}", hex::encode(pref.clone()));
-                let label = if prefix.len() > 0 {
+                let name = format!("hash{}", hex::encode(pref));
+                let label = if !prefix.is_empty() {
                     String::from("hash")
                 } else {
                     String::from("root")

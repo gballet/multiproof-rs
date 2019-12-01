@@ -65,6 +65,10 @@ impl NibbleKey {
         self.0.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     // This method encodes a nibble key to its hex prefix. The output
     // is byte-encoded, so as to be stored immediately.
     pub fn with_hex_prefix(&self, is_terminator: bool) -> Vec<u8> {
@@ -87,9 +91,9 @@ impl NibbleKey {
         output
     }
 
-    pub fn remove_hex_prefix(payload: &Vec<u8>) -> NibbleKey {
+    pub fn remove_hex_prefix(payload: &[u8]) -> NibbleKey {
         if payload.is_empty() {
-            return NibbleKey(payload.clone());
+            return NibbleKey::from(payload);
         }
         match payload[0] {
             x if x & 16 == 16 => {
@@ -123,7 +127,7 @@ impl rlp::Encodable for NibbleKey {
 
 impl Into<Vec<u8>> for NibbleKey {
     fn into(self) -> Vec<u8> {
-        self.0.clone()
+        self.0
     }
 }
 

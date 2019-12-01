@@ -107,7 +107,7 @@ impl<S: KeyValueStore, T: Tree<S> + rlp::Decodable> ProofToTree<S, T> for Multip
 
         stack
             .pop()
-            .ok_or(String::from("Stack underflow, expected root node"))
+            .ok_or_else(|| "Stack underflow, expected root node".to_string())
     }
 }
 
@@ -227,7 +227,7 @@ pub fn make_multiproof(root: &Node, keys: Vec<NibbleKey>) -> Result<Multiproof, 
             // then recurse on it, and ignore all nonexistent key, as the
             // presence of existing keys prove that those missing are not
             // present in the tree.
-            if truncated.is_empty() {
+            if !truncated.is_empty() {
                 let mut proof = make_multiproof(child, truncated)?;
                 hashes.append(&mut proof.hashes);
                 instructions.append(&mut proof.instructions);
