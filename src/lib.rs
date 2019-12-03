@@ -9,11 +9,11 @@ pub mod node;
 pub mod tree;
 pub mod utils;
 
-use instruction::*;
+pub use instruction::*;
 pub use multiproof::*;
 pub use node::*;
-use tree::{KeyValueStore, Tree};
-use utils::*;
+pub use tree::{KeyValueStore, Tree};
+pub use utils::*;
 
 impl<S: KeyValueStore, T: Tree<S> + rlp::Decodable> ProofToTree<S, T> for Multiproof {
     fn rebuild(&self) -> Result<T, String> {

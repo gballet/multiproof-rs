@@ -73,6 +73,10 @@ See unit tests.
 
 ## Changelog
 
+### 0.1.2
+
+  * Export all submodules
+
 ### 0.1.1
 
   * Export `node::*` from crate
