@@ -1,3 +1,6 @@
+[![CircleCI](https://circleci.com/gh/gballet/multiproof-rs.svg?style=svg)](https://circleci.com/gh/gballet/multiproof-rs)
+[![Crates.io](https://img.shields.io/crates/v/multiproof-rs.svg)](https://crates.io/crates/multiproof-rs)
+
 # multiproof.rs
 A rust implementation of Alexey Akhunov's [multiproof algorithm](https://github.com/ledgerwatch/turbo-geth/blob/master/docs/programmers_guide/guide.md).
 
