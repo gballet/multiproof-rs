@@ -70,3 +70,9 @@ let root = rebuild(&proof).unwrap();
 ### Examples
 
 See unit tests.
+
+## Changelog
+
+### 0.1.1
+
+  * Export `node::*` from crate

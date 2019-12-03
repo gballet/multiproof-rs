@@ -11,7 +11,7 @@ pub mod utils;
 
 use instruction::*;
 pub use multiproof::*;
-use node::*;
+pub use node::*;
 use tree::{KeyValueStore, Tree};
 use utils::*;
 
