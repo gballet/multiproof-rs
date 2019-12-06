@@ -1,4 +1,4 @@
-use super::keys::byte_key::ByteKey;
+use super::byte_key::ByteKey;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct NibbleKey(Vec<u8>);

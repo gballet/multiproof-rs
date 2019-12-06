@@ -1,7 +1,6 @@
 extern crate sha3;
 
 use super::tree::*;
-use super::utils::*;
 use super::*;
 use sha3::{Digest, Keccak256};
 
