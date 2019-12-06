@@ -24,7 +24,7 @@ impl From<ByteKey> for NibbleKey {
 
 impl Key<u8> for ByteKey {
     fn head_and_tail(&self) -> (Option<u8>, Self) {
-        if self.0.len() == 0 {
+        if self.0.is_empty() {
             return (None, ByteKey(self.0.clone()));
         }
 
