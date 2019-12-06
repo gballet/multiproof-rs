@@ -1,25 +1,7 @@
+use super::keys::byte_key::ByteKey;
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct NibbleKey(Vec<u8>);
-#[derive(Debug, PartialEq, Clone)]
-pub struct ByteKey(pub Vec<u8>);
-
-impl From<Vec<u8>> for ByteKey {
-    fn from(bytes: Vec<u8>) -> Self {
-        ByteKey(bytes)
-    }
-}
-
-impl From<ByteKey> for NibbleKey {
-    fn from(address: ByteKey) -> Self {
-        let mut nibbles = Vec::new();
-        for nibble in 0..2 * address.0.len() {
-            let nibble_shift = (1 - nibble % 2) * 4;
-
-            nibbles.push((address.0[nibble / 2] >> nibble_shift) & 0xF);
-        }
-        NibbleKey(nibbles)
-    }
-}
 
 impl From<Vec<u8>> for NibbleKey {
     fn from(nibbles: Vec<u8>) -> Self {

@@ -2,6 +2,7 @@ extern crate sha3;
 
 use super::tree::*;
 use super::utils::*;
+use super::*;
 use sha3::{Digest, Keccak256};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -504,7 +505,6 @@ impl Node {
 
 #[cfg(test)]
 mod tests {
-    use super::super::utils;
     use super::Node::*;
     use super::*;
 
@@ -1000,7 +1000,7 @@ mod tests {
 
         let mut root = Branch(vec![EmptySlot; 16]);
         for (ik, iv) in inputs.iter() {
-            let k = NibbleKey::from(utils::ByteKey(hex::decode(&ik[2..]).unwrap()));
+            let k = NibbleKey::from(keys::ByteKey(hex::decode(&ik[2..]).unwrap()));
             let v = hex::decode(&iv[2..]).unwrap();
             root.insert(&k, v).unwrap();
         }
