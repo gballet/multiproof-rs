@@ -12,10 +12,10 @@ pub mod utils;
 pub use instruction::*;
 pub use multiproof::*;
 pub use node::*;
-pub use tree::{KeyValueStore, Tree};
+pub use tree::{NodeType, Tree};
 pub use utils::*;
 
-impl<S: KeyValueStore, T: Tree<S> + rlp::Decodable> ProofToTree<S, T> for Multiproof {
+impl<N: NodeType, T: Tree<N> + rlp::Decodable> ProofToTree<N, T> for Multiproof {
     fn rebuild(&self) -> Result<T, String> {
         use Instruction::*;
 
