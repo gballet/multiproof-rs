@@ -13,7 +13,7 @@ pub enum Node {
     EmptySlot,
 }
 
-impl KeyValueStore for Node {
+impl NodeType for Node {
     type Key = NibbleKey;
     type Value = Vec<u8>;
 }

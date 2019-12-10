@@ -1,7 +1,7 @@
 use super::instruction::*;
-use super::tree::{KeyValueStore, Tree};
+use super::tree::{NodeType, Tree};
 
-pub trait ProofToTree<S: KeyValueStore, T: Tree<S>> {
+pub trait ProofToTree<N: NodeType, T: Tree<N>> {
     /// Rebuilds a tree of type `T` based on the proof's components.
     fn rebuild(&self) -> Result<T, String>;
 }
