@@ -216,6 +216,22 @@ impl Tree<Node> for Node {
         }
     }
 
+    fn has_key(&self, key: &NibbleKey) -> bool {
+        match self {
+            Node::Leaf(ref k, _) => k == key,
+            Node::Hash(_) => false,
+            Node::Branch(ref children) => {
+                children[key[0] as usize].has_key(&NibbleKey::from(&key[1..]))
+            }
+            Node::Extension(ref ext, box child) => {
+                ext.len() <= key.len()
+                    && *ext == NibbleKey::from(&key[..ext.len()])
+                    && child.has_key(&NibbleKey::from(&key[ext.len()..]))
+            }
+            Node::EmptySlot => false,
+        }
+    }
+
     fn value(&self) -> Option<&Vec<u8>> {
         match self {
             Node::Leaf(_, ref v) => Some(v),
@@ -442,22 +458,6 @@ impl Node {
                 /* Ignore EmptySlot */
                 (vec![], vec![])
             }
-        }
-    }
-
-    pub fn is_key_present(&self, key: &NibbleKey) -> bool {
-        match self {
-            Node::Leaf(ref k, _) => k == key,
-            Node::Hash(_) => false,
-            Node::Branch(ref children) => {
-                children[key[0] as usize].is_key_present(&NibbleKey::from(&key[1..]))
-            }
-            Node::Extension(ref ext, box child) => {
-                ext.len() <= key.len()
-                    && *ext == NibbleKey::from(&key[..ext.len()])
-                    && child.is_key_present(&NibbleKey::from(&key[ext.len()..]))
-            }
-            Node::EmptySlot => false,
         }
     }
 

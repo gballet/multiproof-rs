@@ -729,7 +729,7 @@ mod tests {
                 EmptySlot
             ])
         );
-        assert!(!rebuilt.is_key_present(&missing_key));
+        assert!(!rebuilt.has_key(&missing_key));
     }
 
     #[test]
@@ -773,7 +773,7 @@ mod tests {
                 ]))
             )
         );
-        assert!(!rebuilt.is_key_present(&missing_key));
+        assert!(!rebuilt.has_key(&missing_key));
     }
 
     #[test]
@@ -836,7 +836,7 @@ mod tests {
                 EmptySlot
             ])
         );
-        assert!(!rebuilt.is_key_present(&missing_key));
+        assert!(!rebuilt.has_key(&missing_key));
     }
 
     #[test]
@@ -846,7 +846,7 @@ mod tests {
 
         let proof = make_multiproof(&root, vec![missing_key.clone()]).unwrap();
         let rebuilt: Node = proof.rebuild().unwrap();
-        assert!(!rebuilt.is_key_present(&missing_key));
+        assert!(!rebuilt.has_key(&missing_key));
     }
 
     #[test]
@@ -932,7 +932,7 @@ mod tests {
         root.insert(k2, vec![0u8; 32]).unwrap();
         root.insert(k3, vec![0u8; 32]).unwrap();
 
-        assert!(root.is_key_present(k1));
+        assert!(root.has_key(k1));
     }
 
     #[test]
@@ -951,7 +951,7 @@ mod tests {
         root.insert(k2, vec![0u8; 32]).unwrap();
         root.insert(k3, vec![0u8; 32]).unwrap();
 
-        assert!(!root.is_key_present(k1));
+        assert!(!root.has_key(k1));
     }
 
     #[test]
