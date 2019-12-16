@@ -36,6 +36,9 @@ pub trait Tree<N: NodeType>: Sized {
     /// Insert a `(key,value)` pair into a (sub-)tree represented by `root`.
     fn insert(&mut self, key: &N::Key, value: N::Value) -> Result</* TODO &mut self */ (), String>;
 
+    /// Returns `true` if the current tree contains `key` as a key.
+    fn has_key(&self, key: &N::Key) -> bool;
+
     fn value(&self) -> Option<&N::Value>;
     fn value_length(&self) -> Option<usize>;
 
