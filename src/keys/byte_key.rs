@@ -28,7 +28,7 @@ impl Key<u8> for ByteKey {
             return ByteKey(self.0.clone());
         }
 
-         ByteKey::from(self.0[1..].to_vec())
+        ByteKey::from(self.0[1..].to_vec())
     }
 
     fn len(&self) -> usize {
