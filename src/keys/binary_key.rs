@@ -17,9 +17,9 @@ impl Key<u8> for BinaryKey {
 
         // Last bit in the byte?
         if self.1 == 0usize {
-                BinaryKey(self.0[1..].to_vec(), 7usize, self.2)
+            BinaryKey(self.0[1..].to_vec(), 7usize, self.2)
         } else {
-                BinaryKey(self.0.clone(), self.1 - 1, self.2)
+            BinaryKey(self.0.clone(), self.1 - 1, self.2)
         }
     }
 
@@ -232,5 +232,19 @@ mod tests {
             let bit = ((0xF0F0F0u32 >> i) & 1) as u8;
             assert_eq!(key[i], bit);
         }
+    }
+
+    #[test]
+    fn test_bit_index_one_bit() {
+        let key = BinaryKey(vec![0xFu8], 3, 3);
+        assert_eq!(key[0], 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid index 0 into key")]
+    fn test_bit_index_no_bits() {
+        let key = BinaryKey(vec![0xFu8], 3, 4);
+
+        key[0];
     }
 }
