@@ -26,12 +26,12 @@ impl From<&[u8]> for NibbleKey {
 }
 
 impl Key<u8> for NibbleKey {
-    fn head_and_tail(&self) -> (Option<u8>, Self) {
+    fn tail(&self) -> Self {
         if self.0.is_empty() {
-            return (None, NibbleKey(self.0.clone()));
+            return NibbleKey(self.0.clone());
         }
 
-        (Some(self.0[0]), NibbleKey::from(self.0[1..].to_vec()))
+        NibbleKey::from(self.0[1..].to_vec())
     }
 
     fn len(&self) -> usize {

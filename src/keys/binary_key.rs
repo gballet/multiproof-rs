@@ -10,24 +10,16 @@ impl From<Vec<u8>> for BinaryKey {
 }
 
 impl Key<u8> for BinaryKey {
-    fn head_and_tail(&self) -> (Option<u8>, Self) {
+    fn tail(&self) -> Self {
         if self.0.is_empty() {
-            return (None, BinaryKey(vec![], 7, 0));
+            return BinaryKey(vec![], 7, 0);
         }
 
         // Last bit in the byte?
         if self.1 == 0usize {
-            let next_bit = self.0[0] & (1 << self.1);
-            (
-                Some(next_bit),
-                BinaryKey(self.0[1..].to_vec(), 7usize, self.2),
-            )
+                BinaryKey(self.0[1..].to_vec(), 7usize, self.2)
         } else {
-            let next_bit = self.0[0] & (1 << self.1);
-            (
-                Some(next_bit),
-                BinaryKey(self.0.clone(), self.1 - 1, self.2),
-            )
+                BinaryKey(self.0.clone(), self.1 - 1, self.2)
         }
     }
 
@@ -79,8 +71,7 @@ mod tests {
 
         let mut count = 0u32;
         loop {
-            let (head, tail) = key.head_and_tail();
-            assert!(head.unwrap() != 0);
+            let tail = key.tail();
             key = tail;
             count += 1;
             if key.is_empty() {
@@ -99,8 +90,7 @@ mod tests {
 
         let mut count = 0u32;
         loop {
-            let (head, tail) = key.head_and_tail();
-            assert!(head.unwrap() != 0);
+            let tail = key.tail();
             key = tail;
             count += 1;
             if key.is_empty() {
@@ -119,8 +109,7 @@ mod tests {
 
         let mut count = 0u32;
         loop {
-            let (head, tail) = key.head_and_tail();
-            assert_eq!(head, None);
+            let tail = key.tail();
             assert_eq!(key.len(), 0);
             key = tail;
             count += 1;
@@ -140,12 +129,7 @@ mod tests {
 
         let mut count = 0u32;
         loop {
-            let (head, tail) = key.head_and_tail();
-            if count % 2 == 0 {
-                assert_eq!(head.unwrap(), 0);
-            } else {
-                assert!(head.unwrap() != 0);
-            }
+            let tail = key.tail();
             key = tail;
             count += 1;
             if key.is_empty() {
@@ -169,8 +153,7 @@ mod tests {
 
         let mut count = 0u32;
         loop {
-            let (head, tail) = key.head_and_tail();
-            assert!(head.unwrap() != 0);
+            let tail = key.tail();
             key = tail;
             count += 1;
             if key.is_empty() {
@@ -194,8 +177,7 @@ mod tests {
 
         let mut count = 0u32;
         loop {
-            let (head, tail) = key.head_and_tail();
-            assert!(head.unwrap() == 0);
+            let tail = key.tail();
             key = tail;
             count += 1;
             if key.is_empty() {

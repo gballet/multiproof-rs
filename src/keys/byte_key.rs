@@ -23,12 +23,12 @@ impl From<ByteKey> for NibbleKey {
 }
 
 impl Key<u8> for ByteKey {
-    fn head_and_tail(&self) -> (Option<u8>, Self) {
+    fn tail(&self) -> Self {
         if self.0.is_empty() {
-            return (None, ByteKey(self.0.clone()));
+            return ByteKey(self.0.clone());
         }
 
-        (Some(self.0[0]), ByteKey::from(self.0[1..].to_vec()))
+         ByteKey::from(self.0[1..].to_vec())
     }
 
     fn len(&self) -> usize {

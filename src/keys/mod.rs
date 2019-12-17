@@ -9,9 +9,10 @@ pub use nibble_key::*;
 /// Used as an abstraction of the key type, for handling in generic
 /// tree/proof constructions.
 pub trait Key<T> {
-    /// Separates the "head" unit (i.e. bit, nibble or byte) from
-    /// the "tail", i.e. the rest of the key.
-    fn head_and_tail(&self) -> (Option<T>, Self);
+    /// Returns a copy of the current key, in which the first unit
+    /// (i.e. byte, bit, nibble) has been removed. Note that the
+    /// tail of an empty list is another empty list.
+    fn tail(&self) -> Self;
 
     /// Returns the number of units (i.e. bit, nibble or byte)
     fn len(&self) -> usize;
