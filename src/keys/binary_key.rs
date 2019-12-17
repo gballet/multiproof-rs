@@ -1,7 +1,34 @@
 use super::Key;
 
+/// Represents a key whose basic unit is the bit. This is meant to be
+/// used at the key in binary trees.
+///
+/// Bits are stored inside an array of bytes, and are read left to
+/// right. The structure also contains the start and end offset of
+/// the bit field.
+///
+/// # Example structure
+///
+/// The following code will create a bit field with 6 bits spread
+/// over two integers.
+///
+/// ```
+/// use multiproof_rs::keys::BinaryKey;
+/// let bitkey = BinaryKey(vec![0x55; 2], 3, 6);
+/// ```
+///
+/// The internal representation is therefore:
+///
+/// ```text
+/// byte #    |     1        2
+/// bit  #    | 76543210 76543210
+/// ----------+------------------
+/// bit value | 01010101 01010101
+/// offsets   |     ^     ^
+///           |   start  end
+/// ```
 #[derive(Debug, PartialEq, Clone)]
-pub struct BinaryKey(Vec<u8>, usize, usize); // (key data, offset in first byte, offset in last byte)
+pub struct BinaryKey(pub Vec<u8>, pub usize, pub usize); // (key data, offset in first byte, offset in last byte)
 
 impl From<Vec<u8>> for BinaryKey {
     fn from(bytes: Vec<u8>) -> Self {
