@@ -354,7 +354,7 @@ impl std::ops::Index<&NibbleKey> for Node {
                 }
                 Node::Leaf(ref key, _) => {
                     let factor_length = key.factor_length(k);
-                    if k[..factor_length] == key[..factor_length] {
+                    if factor_length == key.len() {
                         self
                     } else {
                         panic!("Requested key isn't present in the tree")
@@ -1042,5 +1042,17 @@ mod tests {
         assert_eq!(root.is_empty(), false);
         assert_eq!(root.is_leaf(), false);
         assert_eq!(root.children().count(), 16);
+    }
+
+    #[test]
+    fn test_key_index_exists() {
+        let root = Leaf(NibbleKey::from(vec![1u8; 4]), vec![1u8; 4]);
+        assert_eq!(root[&NibbleKey::from(vec![1u8; 4])], Leaf(NibbleKey::from(vec![1u8; 4]), vec![1u8; 4]));
+    }
+    #[test]
+    #[should_panic]
+    fn test_key_index_does_not_exists() {
+        let root = Leaf(NibbleKey::from(vec![1u8; 4]), vec![1u8; 4]);
+        assert_eq!(root[&NibbleKey::from(vec![1u8, 1u8, 1u8, 2u8])], EmptySlot);
     }
 }
