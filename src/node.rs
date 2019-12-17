@@ -1047,7 +1047,10 @@ mod tests {
     #[test]
     fn test_key_index_exists() {
         let root = Leaf(NibbleKey::from(vec![1u8; 4]), vec![1u8; 4]);
-        assert_eq!(root[&NibbleKey::from(vec![1u8; 4])], Leaf(NibbleKey::from(vec![1u8; 4]), vec![1u8; 4]));
+        assert_eq!(
+            root[&NibbleKey::from(vec![1u8; 4])],
+            Leaf(NibbleKey::from(vec![1u8; 4]), vec![1u8; 4])
+        );
     }
     #[test]
     #[should_panic]
