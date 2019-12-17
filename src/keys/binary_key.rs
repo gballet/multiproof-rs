@@ -43,6 +43,30 @@ impl Key<u8> for BinaryKey {
     }
 }
 
+impl std::ops::Index<usize> for BinaryKey {
+    type Output = u8;
+
+    #[inline]
+    fn index(&self, i: usize) -> &Self::Output {
+        // Check bounds, after this then the condition self.1 > i
+        // determines if the bit is to be fetched in the first byte
+        // or not.
+        if i >= self.len() {
+            panic!(format!("Invalid index {} into key {:?}", i, self.0));
+        }
+
+        let shift = 7 - self.1;
+        let pos = shift + i;
+        let byte = pos / 8;
+        let offset = 7 - pos % 8;
+
+        match (self.0[byte] >> offset) & 1 {
+            0 => &0u8,
+            _ => &1u8,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -180,5 +204,51 @@ mod tests {
             assert!(count < 4);
         }
         assert_eq!(count, 4);
+    }
+
+    #[test]
+    fn test_bit_index_one_byte() {
+        let val = 0xFu8;
+        let key = BinaryKey(vec![val], 7, 0);
+
+        for i in 0..8 {
+            let bit = (0xF0u8 >> i) & 1;
+            assert_eq!(key[i], bit);
+        }
+    }
+
+    #[test]
+    fn test_bit_index_one_byte_partial() {
+        // 4 bit total:
+        // offset   | 76543210
+        // ---------+---------
+        // bit      | 01010101
+        // pointers |  ^  ^
+        let key = BinaryKey(vec![0x55u8], 6, 3);
+
+        for i in 0..3 {
+            let bit = (5u8 >> i) & 1;
+            assert_eq!(key[i], bit);
+        }
+    }
+
+    #[test]
+    fn test_bit_index_two_bytes() {
+        let key = BinaryKey(vec![0xFu8; 2], 7, 0);
+
+        for i in 0..16 {
+            let bit = ((0xF0F0u16 >> i) & 1) as u8;
+            assert_eq!(key[i], bit);
+        }
+    }
+
+    #[test]
+    fn test_bit_index_three_bytes() {
+        let key = BinaryKey(vec![0xFu8; 3], 7, 0);
+
+        for i in 0..24 {
+            let bit = ((0xF0F0F0u32 >> i) & 1) as u8;
+            assert_eq!(key[i], bit);
+        }
     }
 }
