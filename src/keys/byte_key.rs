@@ -39,3 +39,11 @@ impl Key<u8> for ByteKey {
         self.0.is_empty()
     }
 }
+
+impl std::ops::Index<usize> for ByteKey {
+    type Output = u8;
+
+    fn index(&self, i: usize) -> &Self::Output {
+        &self.0[i]
+    }
+}

@@ -14,7 +14,7 @@ pub struct NodeChildIterator<'a, N: NodeType, T: Tree<N>> {
 /// also implement the `Default` trait.
 pub trait NodeType: Default {
     /// The tree's key type. Must be specified when implementing this trait.
-    type Key;
+    type Key: std::ops::Index<usize>;
     /// The tree's value type. Must be specified when implementing this trait.
     type Value;
 }
