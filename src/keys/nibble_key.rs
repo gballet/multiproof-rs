@@ -41,11 +41,9 @@ impl Key<u8> for NibbleKey {
     fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
-}
 
-impl NibbleKey {
     /// Finds the length of the common prefix of two keys.
-    pub fn factor_length(&self, other: &Self) -> usize {
+    fn common_prefix(&self, other: &Self) -> usize {
         let (ref longuest, ref shortest) = if self.0.len() > other.0.len() {
             (&self.0, &other.0)
         } else {
@@ -65,7 +63,9 @@ impl NibbleKey {
 
         firstdiffindex
     }
+}
 
+impl NibbleKey {
     /// Encodes a nibble key to its hex prefix. The output
     /// is byte-encoded, so as to be stored immediately.
     pub fn with_hex_prefix(&self, is_terminator: bool) -> Vec<u8> {

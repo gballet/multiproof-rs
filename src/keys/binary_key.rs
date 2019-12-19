@@ -60,6 +60,21 @@ impl Key<u8> for BinaryKey {
     fn is_empty(&self) -> bool {
         self.0.len() == 0 || (self.0.len() == 1 && self.1 < self.2)
     }
+
+    fn common_prefix(&self, other: &Self) -> usize {
+        let firstdiffindex = if self.len() > other.len() {
+            other.len()
+        } else {
+            self.len()
+        };
+
+        for i in 0..firstdiffindex {
+            if self[i] != other[i] {
+                return i;
+            }
+        }
+        return firstdiffindex;
+    }
 }
 
 impl std::ops::Index<usize> for BinaryKey {

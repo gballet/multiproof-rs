@@ -3,6 +3,7 @@
 extern crate rlp;
 extern crate sha3;
 
+pub mod binary_tree;
 pub mod instruction;
 pub mod keys;
 pub mod multiproof;
@@ -213,7 +214,7 @@ pub fn make_multiproof(root: &Node, keys: Vec<NibbleKey>) -> Result<Multiproof, 
             // prefix removed.
             let mut truncated = vec![];
             for k in keys.iter() {
-                let factor_length = extkey.factor_length(k);
+                let factor_length = extkey.common_prefix(k);
                 // If a key has a prefix that differs from that of the extension,
                 // then it is missing in this tree and is not added to the list
                 // of shortened keys to be recursively passed down. This special

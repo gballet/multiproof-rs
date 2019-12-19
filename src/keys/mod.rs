@@ -19,4 +19,8 @@ pub trait Key<T> {
 
     /// Returns `true` if the key is zero unit long.
     fn is_empty(&self) -> bool;
+
+    /// Returns the length of the common prefix between `self`
+    /// and `other`.
+    fn common_prefix(&self, other: &Self) -> usize;
 }

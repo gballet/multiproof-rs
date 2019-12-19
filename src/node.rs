@@ -103,7 +103,7 @@ impl Tree<Node> for Node {
             Leaf(leafkey, leafvalue) => {
                 // Find the common part of the current key with that of the
                 // leaf and create an intermediate full node.
-                let firstdiffindex = leafkey.factor_length(key);
+                let firstdiffindex = leafkey.common_prefix(key);
 
                 // Return an error if the leaf is already present.
                 if firstdiffindex == key.len() {
@@ -136,7 +136,7 @@ impl Tree<Node> for Node {
             Extension(extkey, box child) => {
                 // Find the common part of the current key with that of the
                 // extension and create an intermediate full node.
-                let firstdiffindex = extkey.factor_length(&key.clone());
+                let firstdiffindex = extkey.common_prefix(&key.clone());
 
                 // Special case: key is longer than the extension key:
                 // recurse on the child node.
@@ -335,7 +335,7 @@ impl std::ops::Index<&NibbleKey> for Node {
                     children[k[0] as usize].index(&NibbleKey::from(&k[1..]))
                 }
                 Node::Extension(ref ext, box child) => {
-                    let factor_length = ext.factor_length(k);
+                    let factor_length = ext.common_prefix(k);
                     // If the factorized length is that of the extension,
                     // then the indexing key is compatible with this tree
                     // and the function recurses.
@@ -353,7 +353,7 @@ impl std::ops::Index<&NibbleKey> for Node {
                     }
                 }
                 Node::Leaf(ref key, _) => {
-                    let factor_length = key.factor_length(k);
+                    let factor_length = key.common_prefix(k);
                     if k[..factor_length] == key[..factor_length] {
                         self
                     } else {

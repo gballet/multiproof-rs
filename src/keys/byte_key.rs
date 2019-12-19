@@ -38,6 +38,26 @@ impl Key<u8> for ByteKey {
     fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+
+    /// Finds the length of the common prefix of two keys.
+    fn common_prefix(&self, other: &Self) -> usize {
+        let firstdiffindex = if self.len() > other.len() {
+            other.len()
+        } else {
+            self.len()
+        };
+
+        for i in 0..firstdiffindex {
+            if self[i] != other[i] {
+                return i;
+            }
+        }
+
+        assert!(firstdiffindex <= other.len());
+        assert!(firstdiffindex <= self.len());
+
+        firstdiffindex
+    }
 }
 
 impl std::ops::Index<usize> for ByteKey {
