@@ -34,7 +34,14 @@ pub trait Tree<N: NodeType>: Sized {
     /// Returns an iterator to the node's children. Some of these nodes can be empty.
     fn children(&self) -> NodeChildIterator<N, Self>;
     /// Insert a `(key,value)` pair into a (sub-)tree represented by `root`.
-    fn insert(&mut self, key: &N::Key, value: N::Value) -> Result</* TODO &mut self */ (), String>;
+    ///
+    /// Set `overwrite` to `true` if you want to update the value of an existing leaf.
+    fn insert(
+        &mut self,
+        key: &N::Key,
+        value: N::Value,
+        overwrite: bool,
+    ) -> Result</* TODO &mut self */ (), String>;
 
     /// Returns `true` if the current tree contains `key` as a key.
     fn has_key(&self, key: &N::Key) -> bool;

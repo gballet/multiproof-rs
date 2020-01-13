@@ -267,11 +267,11 @@ mod tests {
     #[test]
     fn validate_tree() {
         let mut root = Node::default();
-        root.insert(&NibbleKey::from(vec![2u8; 32]), vec![0u8; 32])
+        root.insert(&NibbleKey::from(vec![2u8; 32]), vec![0u8; 32], false)
             .unwrap();
-        root.insert(&NibbleKey::from(vec![1u8; 32]), vec![1u8; 32])
+        root.insert(&NibbleKey::from(vec![1u8; 32]), vec![1u8; 32], false)
             .unwrap();
-        root.insert(&NibbleKey::from(vec![8u8; 32]), vec![150u8; 32])
+        root.insert(&NibbleKey::from(vec![8u8; 32]), vec![150u8; 32], false)
             .unwrap();
 
         let keys = vec![
@@ -317,11 +317,11 @@ mod tests {
     #[test]
     fn make_multiproof_two_values() {
         let mut root = Node::default();
-        root.insert(&NibbleKey::from(vec![2u8; 32]), vec![0u8; 32])
+        root.insert(&NibbleKey::from(vec![2u8; 32]), vec![0u8; 32], false)
             .unwrap();
-        root.insert(&NibbleKey::from(vec![1u8; 32]), vec![1u8; 32])
+        root.insert(&NibbleKey::from(vec![1u8; 32]), vec![1u8; 32], false)
             .unwrap();
-        root.insert(&NibbleKey::from(vec![8u8; 32]), vec![150u8; 32])
+        root.insert(&NibbleKey::from(vec![8u8; 32]), vec![150u8; 32], false)
             .unwrap();
 
         let proof = make_multiproof(
@@ -373,9 +373,9 @@ mod tests {
     #[test]
     fn make_multiproof_single_value() {
         let mut root = Node::default();
-        root.insert(&NibbleKey::from(vec![2u8; 32]), vec![0u8; 32])
+        root.insert(&NibbleKey::from(vec![2u8; 32]), vec![0u8; 32], false)
             .unwrap();
-        root.insert(&NibbleKey::from(vec![1u8; 32]), vec![1u8; 32])
+        root.insert(&NibbleKey::from(vec![1u8; 32]), vec![1u8; 32], false)
             .unwrap();
 
         let proof = make_multiproof(&root, vec![NibbleKey::from(vec![1u8; 32])]).unwrap();
@@ -408,9 +408,9 @@ mod tests {
     #[test]
     fn make_multiproof_no_values() {
         let mut root = Node::default();
-        root.insert(&NibbleKey::from(vec![2u8; 32]), vec![0u8; 32])
+        root.insert(&NibbleKey::from(vec![2u8; 32]), vec![0u8; 32], false)
             .unwrap();
-        root.insert(&NibbleKey::from(vec![1u8; 32]), vec![1u8; 32])
+        root.insert(&NibbleKey::from(vec![1u8; 32]), vec![1u8; 32], false)
             .unwrap();
 
         let proof = make_multiproof(&root, vec![]).unwrap();
@@ -425,9 +425,9 @@ mod tests {
     #[test]
     fn make_multiproof_hash_before_nested_nodes_in_branch() {
         let mut root = Node::default();
-        root.insert(&NibbleKey::from(vec![1u8; 32]), vec![0u8; 32])
+        root.insert(&NibbleKey::from(vec![1u8; 32]), vec![0u8; 32], false)
             .unwrap();
-        root.insert(&NibbleKey::from(vec![2u8; 32]), vec![0u8; 32])
+        root.insert(&NibbleKey::from(vec![2u8; 32]), vec![0u8; 32], false)
             .unwrap();
 
         let pre_root_hash = root.hash();
@@ -452,7 +452,7 @@ mod tests {
         let mut root = Node::default();
         for i in &inputs {
             let k = nibble_from_hex(&i.0[2..]);
-            root.insert(&k, i.1.clone()).unwrap();
+            root.insert(&k, i.1.clone(), false).unwrap();
         }
 
         let pre_root_hash = root.hash();
@@ -506,7 +506,8 @@ mod tests {
                 .append(&code)
                 .append(&storage_hash);
             let encoding = stream.out();
-            root.insert(&NibbleKey::from(byte_key), encoding).unwrap();
+            root.insert(&NibbleKey::from(byte_key), encoding, false)
+                .unwrap();
         });
 
         let pre_root_hash = root.hash();
@@ -645,7 +646,7 @@ mod tests {
     fn roundtrip() {
         let mut tree_root = Node::Branch(vec![Node::EmptySlot; 16]);
         tree_root
-            .insert(&NibbleKey::from(vec![1u8; 32]), vec![2u8; 32])
+            .insert(&NibbleKey::from(vec![1u8; 32]), vec![2u8; 32], false)
             .unwrap();
 
         assert_eq!(
@@ -670,13 +671,14 @@ mod tests {
     fn test_nullkey_leaf() {
         let missing_key = NibbleKey::from(vec![1u8; 32]);
         let mut root = Node::default();
-        root.insert(&NibbleKey::from(vec![0u8; 32]), vec![0u8; 32])
+        root.insert(&NibbleKey::from(vec![0u8; 32]), vec![0u8; 32], false)
             .unwrap();
         root.insert(
             &NibbleKey::from(ByteKey::from(
                 hex::decode("11111111111111110000000000000000").unwrap(),
             )),
             vec![0u8; 32],
+            false,
         )
         .unwrap();
         let proof = make_multiproof(&root, vec![missing_key.clone()]).unwrap();
@@ -741,6 +743,7 @@ mod tests {
                 hex::decode("11111111111111182222222222222222").unwrap(),
             )),
             vec![0u8; 32],
+            false,
         )
         .unwrap();
         root.insert(
@@ -748,6 +751,7 @@ mod tests {
                 hex::decode("11111111111111180000000000000000").unwrap(),
             )),
             vec![0u8; 32],
+            false,
         )
         .unwrap();
 
@@ -785,6 +789,7 @@ mod tests {
                 hex::decode("11111111111111182222222222222222").unwrap(),
             )),
             vec![0u8; 32],
+            false,
         )
         .unwrap();
         root.insert(
@@ -792,6 +797,7 @@ mod tests {
                 hex::decode("01111111111111180000000000000000").unwrap(),
             )),
             vec![0u8; 32],
+            false,
         )
         .unwrap();
 
@@ -861,9 +867,9 @@ mod tests {
         let k3 = &NibbleKey::from(ByteKey::from(
             hex::decode("00111111111111110000000000000000").unwrap(),
         ));
-        root.insert(k1, vec![0u8; 32]).unwrap();
-        root.insert(k2, vec![0u8; 32]).unwrap();
-        root.insert(k3, vec![0u8; 32]).unwrap();
+        root.insert(k1, vec![0u8; 32], false).unwrap();
+        root.insert(k2, vec![0u8; 32], false).unwrap();
+        root.insert(k3, vec![0u8; 32], false).unwrap();
 
         assert_eq!(
             root[&NibbleKey::from(&k2[..2])],
@@ -883,9 +889,9 @@ mod tests {
         let k3 = &NibbleKey::from(ByteKey::from(
             hex::decode("11111111111111120000000000000000").unwrap(),
         ));
-        root.insert(k1, vec![0u8; 32]).unwrap();
-        root.insert(k2, vec![0u8; 32]).unwrap();
-        root.insert(k3, vec![0u8; 32]).unwrap();
+        root.insert(k1, vec![0u8; 32], false).unwrap();
+        root.insert(k2, vec![0u8; 32], false).unwrap();
+        root.insert(k3, vec![0u8; 32], false).unwrap();
 
         // check that a partial key returns the whole key
         assert_eq!(root[&NibbleKey::from(&k2[..2])], root);
@@ -908,9 +914,9 @@ mod tests {
         let k3 = &NibbleKey::from(ByteKey::from(
             hex::decode("00111111111111110000000000000000").unwrap(),
         ));
-        root.insert(k1, vec![0u8; 32]).unwrap();
-        root.insert(k2, vec![0u8; 32]).unwrap();
-        root.insert(k3, vec![0u8; 32]).unwrap();
+        root.insert(k1, vec![0u8; 32], false).unwrap();
+        root.insert(k2, vec![0u8; 32], false).unwrap();
+        root.insert(k3, vec![0u8; 32], false).unwrap();
 
         assert_eq!(root[&NibbleKey::from(vec![])], root);
     }
@@ -928,9 +934,9 @@ mod tests {
             hex::decode("11111111111111111111111111111111").unwrap(),
         ));
 
-        root.insert(k1, vec![0u8; 32]).unwrap();
-        root.insert(k2, vec![0u8; 32]).unwrap();
-        root.insert(k3, vec![0u8; 32]).unwrap();
+        root.insert(k1, vec![0u8; 32], false).unwrap();
+        root.insert(k2, vec![0u8; 32], false).unwrap();
+        root.insert(k3, vec![0u8; 32], false).unwrap();
 
         assert!(root.has_key(k1));
     }
@@ -948,8 +954,8 @@ mod tests {
             hex::decode("11111111111111111111111111111111").unwrap(),
         ));
 
-        root.insert(k2, vec![0u8; 32]).unwrap();
-        root.insert(k3, vec![0u8; 32]).unwrap();
+        root.insert(k2, vec![0u8; 32], false).unwrap();
+        root.insert(k3, vec![0u8; 32], false).unwrap();
 
         assert!(!root.has_key(k1));
     }
@@ -958,7 +964,7 @@ mod tests {
     fn check_payload_length_exactly_32_bytes() {
         let mut root = Node::default();
 
-        root.insert(&NibbleKey::from(vec![1u8; 16]), vec![1u8; 20])
+        root.insert(&NibbleKey::from(vec![1u8; 16]), vec![1u8; 20], false)
             .unwrap();
         assert_eq!(root.hash().len(), 32);
         assert_eq!(
@@ -974,7 +980,7 @@ mod tests {
     fn check_leaf_length_less_than_32_bytes() {
         let mut root = Node::default();
 
-        root.insert(&NibbleKey::from(vec![1u8; 2]), vec![1u8; 20])
+        root.insert(&NibbleKey::from(vec![1u8; 2]), vec![1u8; 20], false)
             .unwrap();
         assert_eq!(
             root.composition(),
@@ -992,9 +998,9 @@ mod tests {
     #[test]
     fn check_branch_less_than_32_bytes() {
         let mut root = Node::default();
-        root.insert(&NibbleKey::from(vec![1u8; 4]), vec![1u8; 2])
+        root.insert(&NibbleKey::from(vec![1u8; 4]), vec![1u8; 2], false)
             .unwrap();
-        root.insert(&NibbleKey::from(vec![2u8; 4]), vec![1u8; 2])
+        root.insert(&NibbleKey::from(vec![2u8; 4]), vec![1u8; 2], false)
             .unwrap();
 
         assert_eq!(
@@ -1019,9 +1025,9 @@ mod tests {
         second_key.extend(vec![2u8; 2]);
 
         let mut root = Node::default();
-        root.insert(&NibbleKey::from(vec![1u8; 4]), vec![1u8; 2])
+        root.insert(&NibbleKey::from(vec![1u8; 4]), vec![1u8; 2], false)
             .unwrap();
-        root.insert(&NibbleKey::from(second_key), vec![1u8; 2])
+        root.insert(&NibbleKey::from(second_key), vec![1u8; 2], false)
             .unwrap();
 
         assert_eq!(
@@ -1038,5 +1044,16 @@ mod tests {
                 241, 68, 121, 143, 178, 128, 248, 120, 199, 203, 34, 78, 26, 105, 77
             ]
         );
+    }
+
+    #[test]
+    fn check_overwrite() {
+        let mut root = Node::default();
+        root.insert(&NibbleKey::from(vec![1u8; 4]), vec![1u8; 2], false)
+            .unwrap();
+        root.insert(&NibbleKey::from(vec![1u8; 4]), vec![2u8; 2], true)
+            .unwrap();
+
+        assert_eq!(root, Leaf(NibbleKey::from(vec![1, 1, 1, 1]), vec![2, 2]));
     }
 }
