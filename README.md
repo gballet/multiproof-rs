@@ -73,6 +73,13 @@ See unit tests.
 
 ## Changelog
 
+### 0.1.3
+
+  * Allow `insert`s to overwrite existing leaves
+  * Make `has_key` part of the tree trait
+  * Bugfix in `NibbleKey` index calculation
+  * README updates
+
 ### 0.1.2
 
   * Export all submodules
