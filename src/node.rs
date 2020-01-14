@@ -105,9 +105,10 @@ impl Tree<Node> for Node {
                 // leaf and create an intermediate full node.
                 let firstdiffindex = leafkey.factor_length(key);
 
-                // Return an error if the leaf is already present.
+                // Is the leaf already present? If so, update it.
                 if firstdiffindex == key.len() {
-                    return Err("Key is is already present!".to_string());
+                    *leafvalue = value;
+                    return Ok(());
                 }
 
                 // Create the new root, which is a full node.
@@ -1057,5 +1058,16 @@ mod tests {
     fn test_key_index_does_not_exists() {
         let root = Leaf(NibbleKey::from(vec![1u8; 4]), vec![1u8; 4]);
         assert_eq!(root[&NibbleKey::from(vec![1u8, 1u8, 1u8, 2u8])], EmptySlot);
+    }
+
+    #[test]
+    fn check_overwrite() {
+        let mut root = Node::default();
+        root.insert(&NibbleKey::from(vec![1u8; 4]), vec![1u8; 2])
+            .unwrap();
+        root.insert(&NibbleKey::from(vec![1u8; 4]), vec![2u8; 2])
+            .unwrap();
+
+        assert_eq!(root, Leaf(NibbleKey::from(vec![1, 1, 1, 1]), vec![2, 2]));
     }
 }
