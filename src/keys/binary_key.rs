@@ -14,7 +14,7 @@ use super::Key;
 ///
 /// ```
 /// use multiproof_rs::keys::BinaryKey;
-/// let bitkey = BinaryKey(vec![0x55; 2], 3, 6);
+/// let bitkey = BinaryKey::new(vec![0x55; 2], 3, 6);
 /// ```
 ///
 /// The internal representation is therefore:
@@ -28,7 +28,13 @@ use super::Key;
 ///           |   start  end
 /// ```
 #[derive(Debug, PartialEq, Clone)]
-pub struct BinaryKey(pub Vec<u8>, pub usize, pub usize); // (key data, offset in first byte, offset in last byte)
+pub struct BinaryKey(Vec<u8>, usize, usize); // (key data, offset in first byte, offset in last byte)
+
+impl BinaryKey {
+    pub fn new(data: Vec<u8>, start: usize, end: usize) -> Self {
+        BinaryKey(data, start, end)
+    }
+}
 
 impl From<Vec<u8>> for BinaryKey {
     fn from(bytes: Vec<u8>) -> Self {
