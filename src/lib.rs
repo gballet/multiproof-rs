@@ -4,16 +4,16 @@ extern crate rlp;
 extern crate sha3;
 
 pub mod instruction;
+pub mod keys;
 pub mod multiproof;
 pub mod node;
 pub mod tree;
-pub mod utils;
 
 pub use instruction::*;
+pub use keys::*;
 pub use multiproof::*;
 pub use node::*;
 pub use tree::{NodeType, Tree};
-pub use utils::*;
 
 impl<N: NodeType, T: Tree<N> + rlp::Decodable> ProofToTree<N, T> for Multiproof {
     fn rebuild(&self) -> Result<T, String> {
@@ -447,7 +447,7 @@ mod tests {
             ("0x1111111111333333333333333333333333333333", vec![13u8; 32]),
         ];
 
-        let nibble_from_hex = |h| NibbleKey::from(utils::ByteKey(hex::decode(h).unwrap()));
+        let nibble_from_hex = |h| NibbleKey::from(keys::ByteKey(hex::decode(h).unwrap()));
 
         let mut root = Node::default();
         for i in &inputs {
@@ -485,7 +485,7 @@ mod tests {
             let mut hasher = Keccak256::new();
             hasher.input(&address_bytes);
             let address_hash = Vec::<u8>::from(&hasher.result()[..]);
-            let byte_key = utils::ByteKey(address_hash.to_vec());
+            let byte_key = keys::ByteKey(address_hash.to_vec());
 
             let val_obj = v_obj[key].as_object().unwrap();
             let balance = hex::decode(&val_obj["balance"].as_str().unwrap()[2..]).unwrap();
