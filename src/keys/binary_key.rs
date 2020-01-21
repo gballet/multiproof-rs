@@ -42,6 +42,12 @@ impl From<Vec<u8>> for BinaryKey {
     }
 }
 
+impl From<&[u8]> for BinaryKey {
+    fn from(nibbles: &[u8]) -> Self {
+        BinaryKey::from(nibbles.to_vec())
+    }
+}
+
 impl Key<u8> for BinaryKey {
     fn tail(&self) -> Self {
         if self.0.is_empty() {
