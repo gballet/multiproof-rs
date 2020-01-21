@@ -56,8 +56,8 @@ impl std::fmt::Display for Multiproof {
 #[cfg(test)]
 mod tests {
     use super::super::instruction::Instruction::*;
+    use super::super::keys::NibbleKey;
     use super::super::node::Node::*;
-    use super::super::utils::*;
     use super::*;
 
     #[test]

@@ -1,25 +1,12 @@
+use super::byte_key::ByteKey;
+use super::Key;
+
+/// Represents a key whose unit is nibbles, i.e. 4-byte long values.
+///
+/// Internally, nibbles are stored in a byte array, with each byte
+/// having its most significant nibble set to 0.
 #[derive(Debug, PartialEq, Clone)]
 pub struct NibbleKey(Vec<u8>);
-#[derive(Debug, PartialEq, Clone)]
-pub struct ByteKey(pub Vec<u8>);
-
-impl From<Vec<u8>> for ByteKey {
-    fn from(bytes: Vec<u8>) -> Self {
-        ByteKey(bytes)
-    }
-}
-
-impl From<ByteKey> for NibbleKey {
-    fn from(address: ByteKey) -> Self {
-        let mut nibbles = Vec::new();
-        for nibble in 0..2 * address.0.len() {
-            let nibble_shift = (1 - nibble % 2) * 4;
-
-            nibbles.push((address.0[nibble / 2] >> nibble_shift) & 0xF);
-        }
-        NibbleKey(nibbles)
-    }
-}
 
 impl From<Vec<u8>> for NibbleKey {
     fn from(nibbles: Vec<u8>) -> Self {
@@ -38,8 +25,26 @@ impl From<&[u8]> for NibbleKey {
     }
 }
 
+impl Key<u8> for NibbleKey {
+    fn tail(&self) -> Self {
+        if self.0.is_empty() {
+            return NibbleKey(self.0.clone());
+        }
+
+        NibbleKey::from(self.0[1..].to_vec())
+    }
+
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
 impl NibbleKey {
-    // Find the length of the common prefix of two keys
+    /// Finds the length of the common prefix of two keys.
     pub fn factor_length(&self, other: &Self) -> usize {
         let (ref longuest, ref shortest) = if self.0.len() > other.0.len() {
             (&self.0, &other.0)
@@ -61,16 +66,8 @@ impl NibbleKey {
         firstdiffindex
     }
 
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    // This method encodes a nibble key to its hex prefix. The output
-    // is byte-encoded, so as to be stored immediately.
+    /// Encodes a nibble key to its hex prefix. The output
+    /// is byte-encoded, so as to be stored immediately.
     pub fn with_hex_prefix(&self, is_terminator: bool) -> Vec<u8> {
         let ft = if is_terminator { 2 } else { 0 };
         let mut output = vec![0u8; self.0.len() / 2 + 1];
@@ -91,6 +88,8 @@ impl NibbleKey {
         output
     }
 
+    /// Rebuilds the hex prefix from a `&[u8]` slice assumed to
+    /// be hex prefix-encoded.
     pub fn remove_hex_prefix(payload: &[u8]) -> NibbleKey {
         if payload.is_empty() {
             return NibbleKey::from(payload);
@@ -174,18 +173,6 @@ impl From<NibbleKey> for ByteKey {
             result.push(saved);
         }
         ByteKey(result)
-    }
-}
-
-pub fn remove_indicator_prefix(key_nibbles: Vec<u8>) -> Vec<u8> {
-    // only leaf nodes and extension nodes have an indicator prefix
-    if key_nibbles[0] == 1 || key_nibbles[0] == 3 {
-        // if indicator byte is 1, it's an odd-length non-terminal node (extension node)
-        // if 3, it's an odd-length terminal node (leaf node)
-        key_nibbles[1..].to_vec()
-    } else {
-        // if even, should prefix should be either 0 or 2
-        key_nibbles[2..].to_vec()
     }
 }
 
