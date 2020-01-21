@@ -84,14 +84,6 @@ impl Tree<Node> for Node {
         }
     }
 
-    fn children(&self) -> NodeChildIterator<Self, Self> {
-        NodeChildIterator {
-            index: 0,
-            key: None,
-            node: &self,
-        }
-    }
-
     fn insert(&mut self, key: &NibbleKey, value: Vec<u8>) -> Result<(), String> {
         use Node::*;
 

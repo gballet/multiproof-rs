@@ -32,7 +32,13 @@ pub trait Tree<N: NodeType>: Sized {
     /// Set child node #i of the current node.
     fn set_ith_child(&mut self, index: usize, child: &Self);
     /// Returns an iterator to the node's children. Some of these nodes can be empty.
-    fn children(&self) -> NodeChildIterator<N, Self>;
+    fn children(&self) -> NodeChildIterator<N, Self> {
+        NodeChildIterator {
+            index: 0,
+            key: None,
+            node: &self,
+        }
+    }
     /// Insert a `(key,value)` pair into a (sub-)tree represented by `root`.
     fn insert(&mut self, key: &N::Key, value: N::Value) -> Result</* TODO &mut self */ (), String>;
 
