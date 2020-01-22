@@ -95,6 +95,7 @@ impl Tree<Node> for Node {
     fn insert(&mut self, key: &NibbleKey, value: Vec<u8>) -> Result<(), String> {
         use Node::*;
 
+
         if key.is_empty() {
             return Err("Attempted to insert a 0-byte key".to_string());
         }
@@ -103,7 +104,7 @@ impl Tree<Node> for Node {
             Leaf(leafkey, leafvalue) => {
                 // Find the common part of the current key with that of the
                 // leaf and create an intermediate full node.
-                let firstdiffindex = leafkey.factor_length(key);
+                let firstdiffindex = leafkey.common_length(key);
 
                 // Is the leaf already present? If so, update it.
                 if firstdiffindex == key.len() {
@@ -135,16 +136,20 @@ impl Tree<Node> for Node {
                 Ok(())
             }
             Extension(extkey, box child) => {
+                let mut kit = key.iter();
+                let mut eit = extkey.iter();
                 // Find the common part of the current key with that of the
                 // extension and create an intermediate full node.
-                let firstdiffindex = extkey.factor_length(&key.clone());
+                let firstdiffindex = kit.chop_common(&mut eit);
 
                 // Special case: key is longer than the extension key:
                 // recurse on the child node.
                 if firstdiffindex == extkey.len() {
-                    child.insert(&NibbleKey::from(key[extkey.len()..].to_vec()), value)?;
-                    return Ok(());
+                    return child.insert(&NibbleKey::from(kit), value);
                 }
+
+                let old_slot = eit.next().unwrap() as usize;
+                let insert_slot = kit.next().unwrap() as usize;
 
                 // Special case: key is completely unlike the extension key
                 if firstdiffindex == 0 {
@@ -153,20 +158,17 @@ impl Tree<Node> for Node {
                     // Create the entry for the truncated extension key
                     // Was it an extension of 1 ? If so, place the node directly
                     // otherwise truncate the extension.
-                    res[extkey[0] as usize] = if extkey.len() == 1 {
+                    res[old_slot] = if extkey.len() == 1 {
                         child.clone()
                     } else {
-                        Extension(
-                            NibbleKey::from(extkey[1..].to_vec()),
-                            Box::new(child.clone()),
-                        )
+                        Extension(NibbleKey::from(eit), Box::new(child.clone()))
                     };
 
                     // Create the entry for the node. If there was only a
                     // difference of one byte, that byte will be consumed by
                     // the fullnode and therefore the key in the leaf will be
                     // an empty slice `[]`.
-                    res[key[0] as usize] = Leaf(NibbleKey::from(key[1..].to_vec()), value);
+                    res[insert_slot] = Leaf(NibbleKey::from(kit), value);
 
                     *self = Branch(res);
                     return Ok(());
@@ -178,17 +180,13 @@ impl Tree<Node> for Node {
                 // key part. If the common part corresponds to the extension
                 // key length minus one, then there is no need for the creation
                 // of an extension node past the full node.
-                res[extkey[firstdiffindex] as usize] = if extkey.len() - firstdiffindex > 1 {
-                    Extension(
-                        NibbleKey::from(extkey[firstdiffindex + 1..].to_vec()),
-                        Box::new(child.clone()),
-                    )
+                res[old_slot] = if extkey.len() - firstdiffindex > 1 {
+                    Extension(NibbleKey::from(eit), Box::new(child.clone()))
                 } else {
                     child.clone()
                 };
                 // Add the node to be inserted
-                res[key[firstdiffindex] as usize] =
-                    Leaf(NibbleKey::from(key[firstdiffindex + 1..].to_vec()), value);
+                res[insert_slot] = Leaf(NibbleKey::from(kit), value);
                 // Put the common part into an extension node
                 *self = Extension(
                     NibbleKey::from(extkey[..firstdiffindex].to_vec()),
@@ -336,17 +334,17 @@ impl std::ops::Index<&NibbleKey> for Node {
                     children[k[0] as usize].index(&NibbleKey::from(&k[1..]))
                 }
                 Node::Extension(ref ext, box child) => {
-                    let factor_length = ext.factor_length(k);
+                    let common_length = ext.common_length(k);
                     // If the factorized length is that of the extension,
                     // then the indexing key is compatible with this tree
                     // and the function recurses.
-                    if factor_length == ext.len() {
-                        child.index(&k[factor_length..].into())
+                    if common_length == ext.len() {
+                        child.index(&k[common_length..].into())
                     } else {
                         // Otherwise, we either have a key that is shorter
                         // or a differing entry. The former returns the
                         // current node and the latter panics.
-                        if k.len() == factor_length {
+                        if k.len() == common_length {
                             self
                         } else {
                             panic!("Requested key isn't present in the tree")
@@ -354,8 +352,8 @@ impl std::ops::Index<&NibbleKey> for Node {
                     }
                 }
                 Node::Leaf(ref key, _) => {
-                    let factor_length = key.factor_length(k);
-                    if factor_length == key.len() {
+                    let common_length = key.common_length(k);
+                    if common_length == key.len() {
                         self
                     } else {
                         panic!("Requested key isn't present in the tree")
@@ -368,6 +366,54 @@ impl std::ops::Index<&NibbleKey> for Node {
         }
     }
 }
+
+// Implement sub-node access based on a nibble key prefix.
+//impl<'a> std::ops::Index<KeyIterator<'a, u8, NibbleKey>> for Node {
+//type Output = Node;
+//#[inline]
+//fn index(&self, kit: KeyIterator<u8, NibbleKey>) -> &Node {
+//match kit.next() {
+//// If the key has 0-length, then the search is over and
+//// the current node is returned.
+//None => self,
+//Some(nibble) => {
+//match self {
+//Node::Branch(ref children) => children[nibble as usize].index(kit),
+//Node::Extension(ref ext, box child) => {
+////let common_length = ;
+//// If the factorized length is that of the extension,
+//// then the indexing key is compatible with this tree
+//// and the function recurses.
+////if common_length == ext.len() {
+//child.index(kit.chop_common(ext))
+////} else {
+////// Otherwise, we either have a key that is shorter
+////// or a differing entry. The former returns the
+////// current node and the latter panics.
+////if k.len() == common_length {
+////self
+////} else {
+////panic!("Requested key isn't present in the tree")
+////}
+////}
+//}
+//Node::Leaf(ref key, _) => {
+//// If the iterator is empty, then keys were the same length
+//// so return the current node as it's the one we're looking
+//// for.
+//match kit.chop_common(key).next() {
+//None => self,
+//_ => panic!("Requested key isn't present in the tree"),
+//}
+//}
+//Node::EmptySlot | Node::Hash(_) => {
+//panic!("Requested key isn't present in the tree")
+//}
+//}
+//}
+//}
+//}
+//}
 
 impl Node {
     pub fn graphviz(&self) -> String {

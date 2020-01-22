@@ -31,11 +31,11 @@ impl Key<u8> for ByteKey {
         self.0.is_empty()
     }
 
-    fn component_iter(&self) -> KeyIterator<u8, Self> {
+    fn iter(&self) -> KeyIterator<u8, Self> {
         KeyIterator::<u8, Self> {
             item_num: 0,
             container: &self,
-            last_element: 0,
+            element: 0,
         }
     }
 }

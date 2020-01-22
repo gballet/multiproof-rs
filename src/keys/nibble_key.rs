@@ -8,6 +8,12 @@ use super::{Key, KeyIterator};
 #[derive(Debug, PartialEq, Clone)]
 pub struct NibbleKey(Vec<u8>);
 
+impl<'a> From<KeyIterator<'a, u8, NibbleKey>> for NibbleKey {
+    fn from(it: KeyIterator<'a, u8, NibbleKey>) -> Self {
+        NibbleKey(it.container.0[it.item_num..].to_vec())
+    }
+}
+
 impl From<Vec<u8>> for NibbleKey {
     fn from(nibbles: Vec<u8>) -> Self {
         for nibble in nibbles.iter() {
@@ -34,38 +40,16 @@ impl Key<u8> for NibbleKey {
         self.0.is_empty()
     }
 
-    fn component_iter(&self) -> KeyIterator<u8, Self> {
+    fn iter(&self) -> KeyIterator<u8, Self> {
         KeyIterator::<u8, Self> {
             item_num: 0,
             container: &self,
-            last_element: 0,
+            element: 0,
         }
     }
 }
 
 impl NibbleKey {
-    /// Finds the length of the common prefix of two keys.
-    pub fn factor_length(&self, other: &Self) -> usize {
-        let (ref longuest, ref shortest) = if self.0.len() > other.0.len() {
-            (&self.0, &other.0)
-        } else {
-            (&other.0, &self.0)
-        };
-
-        let mut firstdiffindex = shortest.len();
-        for (i, &n) in shortest.iter().enumerate() {
-            if n != longuest[i] {
-                firstdiffindex = i as usize;
-                break;
-            }
-        }
-
-        assert!(firstdiffindex <= other.0.len());
-        assert!(firstdiffindex <= self.0.len());
-
-        firstdiffindex
-    }
-
     /// Encodes a nibble key to its hex prefix. The output
     /// is byte-encoded, so as to be stored immediately.
     pub fn with_hex_prefix(&self, is_terminator: bool) -> Vec<u8> {
