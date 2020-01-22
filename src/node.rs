@@ -95,15 +95,57 @@ impl Tree<Node> for Node {
     fn insert(&mut self, key: &NibbleKey, value: Vec<u8>) -> Result<(), String> {
         use Node::*;
 
+        let mut root = self;
+        let mut kit = key.component_iter();
+
+        while kit.is_end() {
+            match root {
+                Leaf(leafkey, leafvalue) => {
+                    let firstdiffindex = kit.chop_common(leafkey);
+                    if kit.is_end() {
+                        // Is the leaf already present? If so, update it.
+                        *leafvalue = value;
+                    } else {
+                        // Create the new root, which is a full node.
+                        let mut res = vec![EmptySlot; 16];
+                        // Add the initial leaf, with a key truncated by the common
+                        // key part.
+                        res[leafkey[firstdiffindex] as usize] = Leaf(
+                            NibbleKey::from(leafkey[firstdiffindex + 1..].to_vec()),
+                            leafvalue.to_vec(),
+                        );
+                        // Add the node to be inserted, kit.is_end == false so
+                        // kit.next() != None
+                        let insert_slot = kit.next().unwrap() as usize;
+                        assert!(insert_slot < 16);
+                        res[insert_slot] = Leaf(NibbleKey::from(kit.collect()), value);
+                        // Put the common part into an extension node
+                        *root = if firstdiffindex == 0 {
+                            // Special case: no extension necessary
+                            Branch(res)
+                        } else {
+                            Extension(
+                                NibbleKey::from(key[..firstdiffindex].to_vec()),
+                                Box::new(Branch(res)),
+                            )
+                        };
+                    }
+
+                    return Ok(());
+                }
+                _ => panic!("Trying to insert into an invalid node type"),
+            }
+        }
+
         if key.is_empty() {
             return Err("Attempted to insert a 0-byte key".to_string());
         }
 
-        match self {
+        match root {
             Leaf(leafkey, leafvalue) => {
                 // Find the common part of the current key with that of the
                 // leaf and create an intermediate full node.
-                let firstdiffindex = leafkey.factor_length(key);
+                let firstdiffindex = leafkey.common_length(key);
 
                 // Is the leaf already present? If so, update it.
                 if firstdiffindex == key.len() {
@@ -123,7 +165,7 @@ impl Tree<Node> for Node {
                 res[key[firstdiffindex] as usize] =
                     Leaf(NibbleKey::from(key[firstdiffindex + 1..].to_vec()), value);
                 // Put the common part into an extension node
-                *self = if firstdiffindex == 0 {
+                *root = if firstdiffindex == 0 {
                     // Special case: no extension necessary
                     Branch(res)
                 } else {
@@ -137,7 +179,7 @@ impl Tree<Node> for Node {
             Extension(extkey, box child) => {
                 // Find the common part of the current key with that of the
                 // extension and create an intermediate full node.
-                let firstdiffindex = extkey.factor_length(&key.clone());
+                let firstdiffindex = extkey.common_length(&key.clone());
 
                 // Special case: key is longer than the extension key:
                 // recurse on the child node.
@@ -168,7 +210,7 @@ impl Tree<Node> for Node {
                     // an empty slice `[]`.
                     res[key[0] as usize] = Leaf(NibbleKey::from(key[1..].to_vec()), value);
 
-                    *self = Branch(res);
+                    *root = Branch(res);
                     return Ok(());
                 }
 
@@ -190,7 +232,7 @@ impl Tree<Node> for Node {
                 res[key[firstdiffindex] as usize] =
                     Leaf(NibbleKey::from(key[firstdiffindex + 1..].to_vec()), value);
                 // Put the common part into an extension node
-                *self = Extension(
+                *root = Extension(
                     NibbleKey::from(extkey[..firstdiffindex].to_vec()),
                     Box::new(Branch(res)),
                 );
@@ -210,7 +252,7 @@ impl Tree<Node> for Node {
                 Ok(())
             }
             EmptySlot => {
-                *self = Leaf(key.clone(), value);
+                *root = Leaf(key.clone(), value);
                 Ok(())
             }
             _ => panic!("Can not insert a node into a hashed node"),
@@ -336,17 +378,17 @@ impl std::ops::Index<&NibbleKey> for Node {
                     children[k[0] as usize].index(&NibbleKey::from(&k[1..]))
                 }
                 Node::Extension(ref ext, box child) => {
-                    let factor_length = ext.factor_length(k);
+                    let common_length = ext.common_length(k);
                     // If the factorized length is that of the extension,
                     // then the indexing key is compatible with this tree
                     // and the function recurses.
-                    if factor_length == ext.len() {
-                        child.index(&k[factor_length..].into())
+                    if common_length == ext.len() {
+                        child.index(&k[common_length..].into())
                     } else {
                         // Otherwise, we either have a key that is shorter
                         // or a differing entry. The former returns the
                         // current node and the latter panics.
-                        if k.len() == factor_length {
+                        if k.len() == common_length {
                             self
                         } else {
                             panic!("Requested key isn't present in the tree")
@@ -354,8 +396,8 @@ impl std::ops::Index<&NibbleKey> for Node {
                     }
                 }
                 Node::Leaf(ref key, _) => {
-                    let factor_length = key.factor_length(k);
-                    if factor_length == key.len() {
+                    let common_length = key.common_length(k);
+                    if common_length == key.len() {
                         self
                     } else {
                         panic!("Requested key isn't present in the tree")
@@ -368,6 +410,54 @@ impl std::ops::Index<&NibbleKey> for Node {
         }
     }
 }
+
+// Implement sub-node access based on a nibble key prefix.
+//impl<'a> std::ops::Index<KeyIterator<'a, u8, NibbleKey>> for Node {
+//type Output = Node;
+//#[inline]
+//fn index(&self, kit: KeyIterator<u8, NibbleKey>) -> &Node {
+//match kit.next() {
+//// If the key has 0-length, then the search is over and
+//// the current node is returned.
+//None => self,
+//Some(nibble) => {
+//match self {
+//Node::Branch(ref children) => children[nibble as usize].index(kit),
+//Node::Extension(ref ext, box child) => {
+////let common_length = ;
+//// If the factorized length is that of the extension,
+//// then the indexing key is compatible with this tree
+//// and the function recurses.
+////if common_length == ext.len() {
+//child.index(kit.chop_common(ext))
+////} else {
+////// Otherwise, we either have a key that is shorter
+////// or a differing entry. The former returns the
+////// current node and the latter panics.
+////if k.len() == common_length {
+////self
+////} else {
+////panic!("Requested key isn't present in the tree")
+////}
+////}
+//}
+//Node::Leaf(ref key, _) => {
+//// If the iterator is empty, then keys were the same length
+//// so return the current node as it's the one we're looking
+//// for.
+//match kit.chop_common(key).next() {
+//None => self,
+//_ => panic!("Requested key isn't present in the tree"),
+//}
+//}
+//Node::EmptySlot | Node::Hash(_) => {
+//panic!("Requested key isn't present in the tree")
+//}
+//}
+//}
+//}
+//}
+//}
 
 impl Node {
     pub fn graphviz(&self) -> String {

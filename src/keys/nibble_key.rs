@@ -38,34 +38,12 @@ impl Key<u8> for NibbleKey {
         KeyIterator::<u8, Self> {
             item_num: 0,
             container: &self,
-            last_element: 0,
+            element: 0,
         }
     }
 }
 
 impl NibbleKey {
-    /// Finds the length of the common prefix of two keys.
-    pub fn factor_length(&self, other: &Self) -> usize {
-        let (ref longuest, ref shortest) = if self.0.len() > other.0.len() {
-            (&self.0, &other.0)
-        } else {
-            (&other.0, &self.0)
-        };
-
-        let mut firstdiffindex = shortest.len();
-        for (i, &n) in shortest.iter().enumerate() {
-            if n != longuest[i] {
-                firstdiffindex = i as usize;
-                break;
-            }
-        }
-
-        assert!(firstdiffindex <= other.0.len());
-        assert!(firstdiffindex <= self.0.len());
-
-        firstdiffindex
-    }
-
     /// Encodes a nibble key to its hex prefix. The output
     /// is byte-encoded, so as to be stored immediately.
     pub fn with_hex_prefix(&self, is_terminator: bool) -> Vec<u8> {

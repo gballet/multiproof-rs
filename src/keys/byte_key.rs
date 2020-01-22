@@ -35,7 +35,7 @@ impl Key<u8> for ByteKey {
         KeyIterator::<u8, Self> {
             item_num: 0,
             container: &self,
-            last_element: 0,
+            element: 0,
         }
     }
 }

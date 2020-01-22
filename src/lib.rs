@@ -213,13 +213,13 @@ pub fn make_multiproof(root: &Node, keys: Vec<NibbleKey>) -> Result<Multiproof, 
             // prefix removed.
             let mut truncated = vec![];
             for k in keys.iter() {
-                let factor_length = extkey.factor_length(k);
+                let common_length = extkey.common_length(k);
                 // If a key has a prefix that differs from that of the extension,
                 // then it is missing in this tree and is not added to the list
                 // of shortened keys to be recursively passed down. This special
                 // case is handled after the loop.
-                if factor_length == extkey.len() {
-                    truncated.push(NibbleKey::from(&k[factor_length..]));
+                if common_length == extkey.len() {
+                    truncated.push(NibbleKey::from(&k[common_length..]));
                 }
             }
             // If truncated.len() > 0, there is at least one requested key
