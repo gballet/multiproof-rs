@@ -1,6 +1,8 @@
 #![feature(box_syntax, box_patterns)]
 
+extern crate cbor;
 extern crate rlp;
+extern crate rustc_serialize;
 extern crate sha3;
 
 pub mod instruction;

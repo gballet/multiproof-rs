@@ -22,6 +22,25 @@ impl rlp::Encodable for Multiproof {
     }
 }
 
+impl rustc_serialize::Encodable for Multiproof {
+    fn encode<E: rustc_serialize::Encoder>(&self, e: &mut E) -> Result<(), E::Error> {
+        for instr in self.instructions {
+            match instr {
+                Instruction::BRANCH(slot) => cbor::CborTagEncode::new(100_002, &slot).encode(e)?,
+                Instruction::HASHER => cbor::CborTagEncode::new(100_003, &[]).encode(e)?,
+                Instruction::LEAF(key, val) => { 
+                    cbor::CborTagEncode::new(100_004, &key).encode(e)?;
+                    cbor::CborTagEncode::new(100_004, &val).encode(e)?;
+                }
+                Instruction::EXTENSION(ext) => cbor::CborTagEncode::new(100_005, &ext).encode(e)?,
+                Instruction::ADD(slot) => cbor::CborTagEncode::new(100_002, &slot).encode(e)?,
+                }
+            }
+        }
+        cbor::CborTagEncode::new(100_000, &self.hashes.iter().flatten().collect()).encode(e)?;
+        cbor::CborTagEncode::new(100_001, &self.keyvals.iter().flatten().collect()).encode(e)
+}
+
 impl rlp::Decodable for Multiproof {
     fn decode(rlp: &rlp::Rlp) -> Result<Self, rlp::DecoderError> {
         let hashes: Vec<Vec<u8>> = rlp.list_at(0usize)?;
@@ -61,7 +80,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn encode_decode_multiproof() {
+    fn rlp_encode_decode_multiproof() {
         let mp = Multiproof {
             hashes: vec![vec![1u8; 32]],
             instructions: vec![LEAF(0)],
@@ -78,4 +97,7 @@ mod tests {
             }
         )
     }
+
+    #[test]
+    fn cbor_encode_decode_multiproof() {}
 }
