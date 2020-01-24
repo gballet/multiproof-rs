@@ -135,6 +135,7 @@ impl std::ops::Index<std::ops::RangeFrom<usize>> for NibbleKey {
 impl std::ops::Index<std::ops::RangeTo<usize>> for NibbleKey {
     type Output = [u8];
 
+    // Problem here
     #[inline]
     fn index(&self, r: std::ops::RangeTo<usize>) -> &[u8] {
         &self.0[r]
