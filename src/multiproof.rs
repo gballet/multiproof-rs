@@ -1,12 +1,13 @@
 use super::instruction::*;
 use super::tree::{NodeType, Tree};
+use serde::{Deserialize, Serialize};
 
 pub trait ProofToTree<N: NodeType, T: Tree<N>> {
     /// Rebuilds a tree of type `T` based on the proof's components.
     fn rebuild(&self) -> Result<T, String>;
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Multiproof {
     pub hashes: Vec<Vec<u8>>,           // List of hashes in the proof
     pub instructions: Vec<Instruction>, // List of instructions in the proof
@@ -61,7 +62,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn encode_decode_multiproof() {
+    fn rlp_encode_decode_multiproof() {
         let mp = Multiproof {
             hashes: vec![vec![1u8; 32]],
             instructions: vec![LEAF(0)],
@@ -77,5 +78,30 @@ mod tests {
                 instructions: vec![LEAF(0)]
             }
         )
+    }
+
+    #[test]
+    fn cbor_encode_decode_multiproof() {
+        use serde_cbor::{from_slice, to_vec};
+
+        let mp = Multiproof {
+            hashes: vec![vec![1u8; 32]],
+            instructions: vec![LEAF(0)],
+            keyvals: vec![rlp::encode(&Leaf(NibbleKey::from(vec![1]), vec![2]))],
+        };
+
+        let encoding = to_vec(&mp).unwrap();
+        assert_eq!(
+            encoding,
+            vec![
+                163, 102, 104, 97, 115, 104, 101, 115, 129, 152, 32, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 108, 105, 110,
+                115, 116, 114, 117, 99, 116, 105, 111, 110, 115, 129, 161, 100, 76, 69, 65, 70, 0,
+                103, 107, 101, 121, 118, 97, 108, 115, 129, 131, 24, 194, 24, 49, 2
+            ]
+        );
+
+        let out = from_slice(&encoding[..]).unwrap();
+        assert_eq!(mp, out);
     }
 }

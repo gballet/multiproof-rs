@@ -1,10 +1,12 @@
+use serde::{Deserialize, Serialize};
+
 const BRANCH_OPCODE: usize = 0;
 const HASHER_OPCODE: usize = 1;
 const LEAF_OPCODE: usize = 2;
 const EXTENSION_OPCODE: usize = 3;
 const ADD_OPCODE: usize = 4;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum Instruction {
     BRANCH(usize),
     HASHER,
