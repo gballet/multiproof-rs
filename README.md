@@ -73,6 +73,11 @@ See unit tests.
 
 ## Changelog
 
+### 0.1.4
+
+  * Support for binary trees
+  * CBOR encoding of proofs
+
 ### 0.1.3
 
   * Allow `insert`s to overwrite existing leaves
