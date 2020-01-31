@@ -1,4 +1,4 @@
-use super::Key;
+use super::{Key, KeyIterator};
 
 /// Represents a key whose basic unit is the bit. This is meant to be
 /// used at the key in binary trees.
@@ -34,6 +34,19 @@ impl BinaryKey {
     pub fn new(data: Vec<u8>, start: usize, end: usize) -> Self {
         BinaryKey(data, start, end)
     }
+
+    pub fn tail(&self) -> Self {
+        if self.0.is_empty() {
+            return BinaryKey(vec![], 7, 0);
+        }
+
+        // Last bit in the byte?
+        if self.1 == 0usize {
+            BinaryKey(self.0[1..].to_vec(), 7usize, self.2)
+        } else {
+            BinaryKey(self.0.clone(), self.1 - 1, self.2)
+        }
+    }
 }
 
 impl From<Vec<u8>> for BinaryKey {
@@ -48,20 +61,7 @@ impl From<&[u8]> for BinaryKey {
     }
 }
 
-impl Key<u8> for BinaryKey {
-    fn tail(&self) -> Self {
-        if self.0.is_empty() {
-            return BinaryKey(vec![], 7, 0);
-        }
-
-        // Last bit in the byte?
-        if self.1 == 0usize {
-            BinaryKey(self.0[1..].to_vec(), 7usize, self.2)
-        } else {
-            BinaryKey(self.0.clone(), self.1 - 1, self.2)
-        }
-    }
-
+impl Key<bool> for BinaryKey {
     fn len(&self) -> usize {
         match self.0.len() {
             0 => 0,
@@ -75,7 +75,7 @@ impl Key<u8> for BinaryKey {
 }
 
 impl std::ops::Index<usize> for BinaryKey {
-    type Output = u8;
+    type Output = bool;
 
     #[inline]
     fn index(&self, i: usize) -> &Self::Output {
@@ -92,9 +92,19 @@ impl std::ops::Index<usize> for BinaryKey {
         let offset = 7 - pos % 8;
 
         match (self.0[byte] >> offset) & 1 {
-            0 => &0u8,
-            _ => &1u8,
+            0 => &false,
+            _ => &true,
         }
+    }
+}
+
+impl<'a> From<KeyIterator<'a, bool, BinaryKey>> for BinaryKey {
+    fn from(it: KeyIterator<'a, bool, BinaryKey>) -> Self {
+        BinaryKey(
+            it.container.0[..].to_vec(),
+            it.container.1 + it.item_num,
+            it.container.2,
+        )
     }
 }
 
@@ -233,7 +243,7 @@ mod tests {
         let key = BinaryKey(vec![val], 7, 0);
 
         for i in 0..8 {
-            let bit = (0xF0u8 >> i) & 1;
+            let bit = (0xF0u8 >> i) & 1 == 1;
             assert_eq!(key[i], bit);
         }
     }
@@ -248,7 +258,7 @@ mod tests {
         let key = BinaryKey(vec![0x55u8], 6, 3);
 
         for i in 0..3 {
-            let bit = (5u8 >> i) & 1;
+            let bit = (5u8 >> i) & 1 == 1;
             assert_eq!(key[i], bit);
         }
     }
@@ -258,7 +268,7 @@ mod tests {
         let key = BinaryKey(vec![0xFu8; 2], 7, 0);
 
         for i in 0..16 {
-            let bit = ((0xF0F0u16 >> i) & 1) as u8;
+            let bit = ((0xF0F0u16 >> i) & 1) == 1;
             assert_eq!(key[i], bit);
         }
     }
@@ -268,7 +278,7 @@ mod tests {
         let key = BinaryKey(vec![0xFu8; 3], 7, 0);
 
         for i in 0..24 {
-            let bit = ((0xF0F0F0u32 >> i) & 1) as u8;
+            let bit = ((0xF0F0F0u32 >> i) & 1) == 1;
             assert_eq!(key[i], bit);
         }
     }
@@ -276,7 +286,7 @@ mod tests {
     #[test]
     fn test_bit_index_one_bit() {
         let key = BinaryKey(vec![0xFu8], 3, 3);
-        assert_eq!(key[0], 1);
+        assert_eq!(key[0], true);
     }
 
     #[test]

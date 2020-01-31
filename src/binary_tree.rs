@@ -81,42 +81,39 @@ impl Tree<BinaryTree> for BinaryTree {
     }
 
     fn insert(&mut self, key: &BinaryKey, value: Vec<u8>) -> Result<(), String> {
+        let mut kit = key.iter();
         match self {
             BinaryTree::Leaf(ref leafkey, leafvalue) => {
-                // Keep inserting branches until the two keys
-                // differ.
-                if leafkey[0] == key[0] {
-                    // The usual left or right question
-                    if key[0] == 0 {
-                        let mut left = BinaryTree::Leaf(leafkey.tail(), leafvalue.to_vec());
-                        left.insert(&key.tail(), value)?;
-                        *self =
-                            BinaryTree::Branch(Box::new(left), Box::new(BinaryTree::EmptyChild));
-                    } else {
-                        let mut right = BinaryTree::Leaf(leafkey.tail(), leafvalue.to_vec());
-                        right.insert(&key.tail(), value)?;
-                        *self =
-                            BinaryTree::Branch(Box::new(BinaryTree::EmptyChild), Box::new(right));
+                let mut lit = leafkey.iter();
+                match (kit.next(), lit.next()) {
+                    // Keep inserting branches until the two keys
+                    // differ.
+                    (Some(k), Some(l)) if k == l => {
+                        let mut child = BinaryTree::Leaf(BinaryKey::from(lit), leafvalue.to_vec());
+                        child.insert(&BinaryKey::from(kit), value)?;
+                        let (left, right) = match k {
+                            true => (child, BinaryTree::EmptyChild),
+                            false => (BinaryTree::EmptyChild, child),
+                        };
+                        *self = BinaryTree::Branch(Box::new(left), Box::new(right));
                     }
-                } else {
-                    // The algorithm has reached the point where both keys
-                    // differ, so create the final branch
-                    *self = if key[0] == 0 {
-                        BinaryTree::Branch(
-                            Box::new(BinaryTree::Leaf(key.tail(), value)),
-                            Box::new(BinaryTree::Leaf(leafkey.tail(), leafvalue.to_vec())),
-                        )
-                    } else {
-                        BinaryTree::Branch(
-                            Box::new(BinaryTree::Leaf(leafkey.tail(), leafvalue.to_vec())),
-                            Box::new(BinaryTree::Leaf(key.tail(), value)),
-                        )
-                    };
+                    (Some(k), Some(_)) => {
+                        let orig = BinaryTree::Leaf(BinaryKey::from(lit), leafvalue.to_vec());
+                        let new = BinaryTree::Leaf(BinaryKey::from(kit), value);
+                        let (left, right) = match k {
+                            false => (new, orig),
+                            true => (orig, new),
+                        };
+                        *self = BinaryTree::Branch(Box::new(left), Box::new(right));
+                    }
+                    // Both reached the end, update (TODO)
+                    (None, None) => panic!("No update currently supported"),
+                    _ => panic!("Key length mismatch in insert"),
                 }
                 Ok(())
             }
             BinaryTree::Branch(box left, box right) => {
-                if key[0] == 0 {
+                if key[0] {
                     left.insert(&key.tail(), value)
                 } else {
                     right.insert(&key.tail(), value)
@@ -135,7 +132,7 @@ impl Tree<BinaryTree> for BinaryTree {
             BinaryTree::Leaf(ref k, _) => k == key,
             BinaryTree::Hash(_) => false,
             BinaryTree::Branch(box left, box right) => {
-                if key[0] == 0 {
+                if key[0] {
                     left.has_key(&key.tail())
                 } else {
                     right.has_key(&key.tail())
