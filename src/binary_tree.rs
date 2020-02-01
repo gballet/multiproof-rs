@@ -92,8 +92,8 @@ impl Tree<BinaryTree> for BinaryTree {
                         let mut child = BinaryTree::Leaf(BinaryKey::from(lit), leafvalue.to_vec());
                         child.insert(&BinaryKey::from(kit), value)?;
                         let (left, right) = match k {
-                            true => (child, BinaryTree::EmptyChild),
-                            false => (BinaryTree::EmptyChild, child),
+                            false => (child, BinaryTree::EmptyChild),
+                            true => (BinaryTree::EmptyChild, child),
                         };
                         *self = BinaryTree::Branch(Box::new(left), Box::new(right));
                     }
@@ -114,9 +114,9 @@ impl Tree<BinaryTree> for BinaryTree {
             }
             BinaryTree::Branch(box left, box right) => {
                 if key[0] {
-                    left.insert(&key.tail(), value)
-                } else {
                     right.insert(&key.tail(), value)
+                } else {
+                    left.insert(&key.tail(), value)
                 }
             }
             BinaryTree::EmptyChild => {
@@ -212,7 +212,7 @@ mod tests {
         assert_eq!(
             root,
             Branch(
-                Box::new(Leaf(BinaryKey::new(vec![5u8; 32], 6, 0), vec![10; 32])),
+                Box::new(Leaf(BinaryKey::new(vec![5u8; 32], 1, 256), vec![10; 32])),
                 Box::new(EmptyChild)
             )
         );
@@ -231,8 +231,8 @@ mod tests {
                 Box::new(Branch(
                     Box::new(EmptyChild),
                     Box::new(Branch(
-                        Box::new(Leaf(BinaryKey::new(vec![0x55u8; 32], 4, 0), vec![10; 32])),
-                        Box::new(Leaf(BinaryKey::new(vec![0x66u8; 32], 4, 0), vec![10; 32])),
+                        Box::new(Leaf(BinaryKey::new(vec![0x55u8; 32], 3, 256), vec![10; 32])),
+                        Box::new(Leaf(BinaryKey::new(vec![0x66u8; 32], 3, 256), vec![10; 32])),
                     )),
                 )),
                 Box::new(EmptyChild)
