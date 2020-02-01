@@ -35,10 +35,6 @@ impl BinaryKey {
     pub fn new(data: Vec<u8>, start: usize, end: usize) -> Self {
         BinaryKey(data, start, end)
     }
-
-    pub fn tail(&self) -> Self {
-        BinaryKey(self.0[..].to_vec(), self.1 + 1, self.2)
-    }
 }
 
 impl From<Vec<u8>> for BinaryKey {
@@ -107,79 +103,35 @@ mod tests {
 
     #[test]
     fn test_iterate_over_one_byte() {
-        let mut key = BinaryKey::from(vec![0xFFu8]);
+        let key = BinaryKey::from(vec![0xFFu8]);
 
         assert_eq!(key.len(), 8);
-
-        let mut count = 0u32;
-        loop {
-            let tail = key.tail();
-            key = tail;
-            count += 1;
-            if key.is_empty() {
-                break;
-            }
-            assert!(count < 8);
-        }
-        assert_eq!(count, 8);
+        assert_eq!(key.iter().count(), 8);
     }
 
     #[test]
     fn test_iterate_over_two_bytes() {
-        let mut key = BinaryKey::from(vec![0xFFu8, 0xFFu8]);
+        let key = BinaryKey::from(vec![0xFFu8, 0xFFu8]);
 
         assert_eq!(key.len(), 16);
-
-        let mut count = 0u32;
-        loop {
-            let tail = key.tail();
-            key = tail;
-            count += 1;
-            if key.is_empty() {
-                break;
-            }
-            assert!(count < 16);
-        }
-        assert_eq!(count, 16);
+        assert_eq!(key.iter().count(), 16);
     }
 
     #[test]
     fn test_iterate_over_zero_bytes() {
-        let mut key = BinaryKey::from(vec![]);
+        let key = BinaryKey::from(vec![]);
 
         assert_eq!(key.len(), 0);
-
-        let mut count = 0u32;
-        loop {
-            let tail = key.tail();
-            assert_eq!(key.len(), 0);
-            key = tail;
-            count += 1;
-            if key.is_empty() {
-                break;
-            }
-            assert!(count < 2);
-        }
-        assert_eq!(count, 1);
+        assert_eq!(key.iter().count(), 0);
     }
 
     #[test]
     fn test_iterate_endianness() {
-        let mut key = BinaryKey::from(vec![0x55u8, 0x55u8]);
+        let key = BinaryKey::from(vec![0x55u8, 0x55u8]);
 
-        assert_eq!(key.len(), 16);
-
-        let mut count = 0u32;
-        loop {
-            let tail = key.tail();
-            key = tail;
-            count += 1;
-            if key.is_empty() {
-                break;
-            }
-            assert!(count < 16);
+        for (i, b) in key.iter().enumerate() {
+            assert_eq!(b, (key.len() - i) % 2 == 1);
         }
-        assert_eq!(count, 16);
     }
 
     #[test]
@@ -189,21 +141,10 @@ mod tests {
         // ---------+------------------
         // bit      | 01011111 11110101
         // pointers |     ^        ^
-        let mut key = BinaryKey(vec![0x5Fu8, 0xF5u8], 4, 12);
+        let key = BinaryKey(vec![0x5Fu8, 0xF5u8], 4, 12);
 
         assert_eq!(key.len(), 8);
-
-        let mut count = 0u32;
-        loop {
-            let tail = key.tail();
-            key = tail;
-            count += 1;
-            if key.is_empty() {
-                break;
-            }
-            assert!(count < 8);
-        }
-        assert_eq!(count, 8);
+        assert_eq!(key.iter().count(), 8);
     }
 
     #[test]
@@ -213,21 +154,10 @@ mod tests {
         // ---------+---------
         // bit      | 10000111
         // pointers |  ^  ^
-        let mut key = BinaryKey(vec![0x87u8], 3, 7);
+        let key = BinaryKey(vec![0x87u8], 3, 7);
 
         assert_eq!(key.len(), 4);
-
-        let mut count = 0u32;
-        loop {
-            let tail = key.tail();
-            key = tail;
-            count += 1;
-            if key.is_empty() {
-                break;
-            }
-            assert!(count < 4);
-        }
-        assert_eq!(count, 4);
+        assert_eq!(key.iter().count(), 4);
     }
 
     #[test]

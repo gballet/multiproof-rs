@@ -112,15 +112,13 @@ impl Tree<BinaryTree> for BinaryTree {
                 }
                 Ok(())
             }
-            BinaryTree::Branch(box left, box right) => {
-                if key[0] {
-                    right.insert(&key.tail(), value)
-                } else {
-                    left.insert(&key.tail(), value)
-                }
-            }
+            BinaryTree::Branch(box left, box right) => match kit.next() {
+                Some(bit) if bit => right.insert(&BinaryKey::from(kit), value),
+                Some(_) => left.insert(&BinaryKey::from(kit), value),
+                None => panic!("Key shorter than the tree, can't select branch side"),
+            },
             BinaryTree::EmptyChild => {
-                *self = BinaryTree::Leaf(key.clone(), value);
+                *self = BinaryTree::Leaf(BinaryKey::from(kit), value);
                 Ok(())
             }
             _ => panic!("Can not insert in this node type"),
@@ -128,16 +126,15 @@ impl Tree<BinaryTree> for BinaryTree {
     }
 
     fn has_key(&self, key: &BinaryKey) -> bool {
+        let mut kit = key.iter();
         match self {
             BinaryTree::Leaf(ref k, _) => k == key,
             BinaryTree::Hash(_) => false,
-            BinaryTree::Branch(box left, box right) => {
-                if key[0] {
-                    left.has_key(&key.tail())
-                } else {
-                    right.has_key(&key.tail())
-                }
-            }
+            BinaryTree::Branch(box left, box right) => match kit.next() {
+                Some(bit) if bit => right.has_key(&BinaryKey::from(kit)),
+                Some(_) => left.has_key(&BinaryKey::from(kit)),
+                None => panic!("Key is too short"),
+            },
             BinaryTree::EmptyChild => false,
         }
     }
@@ -238,5 +235,29 @@ mod tests {
                 Box::new(EmptyChild)
             )
         );
+    }
+
+    #[test]
+    fn has_key_leaf() {
+        let root = BinaryTree::new_leaf(vec![0x66u8; 32], vec![10; 32]);
+        assert!(root.has_key(&BinaryKey::from(vec![0x66u8; 32])));
+        assert!(!root.has_key(&BinaryKey::from(vec![0x55u8; 32])));
+    }
+
+    #[test]
+    fn has_key_branch() {
+        let mut root = BinaryTree::new_leaf(vec![0x66u8; 32], vec![10; 32]);
+
+        root.insert(&BinaryKey::from(vec![0x55u8; 32]), vec![10; 32])
+            .unwrap();
+
+        assert!(root.has_key(&BinaryKey::from(vec![0x66u8; 32])));
+        assert!(root.has_key(&BinaryKey::from(vec![0x55u8; 32])));
+    }
+
+    #[test]
+    fn has_key_empty() {
+        let root = BinaryTree::new_empty();
+        assert!(!root.has_key(&BinaryKey::from(vec![0x66u8; 32])));
     }
 }
