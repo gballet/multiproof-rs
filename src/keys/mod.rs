@@ -59,42 +59,34 @@ where
     U: PartialEq + Copy,
     K: Key<U> + std::ops::Index<usize, Output = U>,
 {
-    fn rewind(&mut self) {
-        assert!(self.item_num > 0);
-        self.item_num -= 1;
+    fn peek(&self) -> Option<U> {
+        if self.item_num >= self.container.len() {
+            None
+        } else {
+            Some(self.container[self.item_num])
+        }
     }
 
     /// Compares the two iterators and leave them at their first differing
-    /// element.
-    pub fn chop_common(&mut self, other: &mut Self) -> usize {
+    /// element. Returns an iterator over the common part.
+    pub fn waypoint(&mut self, other: &mut Self) -> Self {
+        let selfstart = self.item_num;
         loop {
-            let (rewind, brk) = match (self.next(), other.next()) {
-                // Both iterators reached the end, keys are
-                // identical.
-                (None, None) => (false, true),
-                // One of the iterators has reached the end,
-                // advance both and return.
-                (_, None) | (None, _) => (true, true),
-                // Both iterators are still pointing at a
-                // value, check if these values are the same.
-                // If they are, loop, otherwise quit.
-                (Some(x), Some(y)) => (x != y, x != y),
-            };
-
-            if rewind {
-                self.rewind();
-                other.rewind();
-            }
-
-            if brk {
-                break;
+            match (self.peek(), other.peek()) {
+                // Keep advancing while iterators return the same
+                // values.
+                (Some(k), Some(l)) if k == l => {
+                    self.next().unwrap();
+                    other.next().unwrap();
+                }
+                _ => break,
             }
         }
-        self.course()
-    }
-
-    fn course(&self) -> usize {
-        self.item_num
+        Self {
+            container: self.container,
+            item_num: selfstart,
+            element: self.element,
+        }
     }
 
     pub fn is_end(&self) -> bool {
