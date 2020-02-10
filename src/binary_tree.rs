@@ -91,19 +91,17 @@ impl Tree<BinaryTree> for BinaryTree {
                     (Some(k), Some(l)) if k == l => {
                         let mut child = BinaryTree::Leaf(BinaryKey::from(lit), leafvalue.to_vec());
                         child.insert(&BinaryKey::from(kit), value)?;
-                        let (left, right) = match k {
-                            false => (child, BinaryTree::EmptyChild),
-                            true => (BinaryTree::EmptyChild, child),
+                        let (left, right) = if k {
+                            (BinaryTree::EmptyChild, child)
+                        } else {
+                            (child, BinaryTree::EmptyChild)
                         };
                         *self = BinaryTree::Branch(Box::new(left), Box::new(right));
                     }
                     (Some(k), Some(_)) => {
                         let orig = BinaryTree::Leaf(BinaryKey::from(lit), leafvalue.to_vec());
                         let new = BinaryTree::Leaf(BinaryKey::from(kit), value);
-                        let (left, right) = match k {
-                            false => (new, orig),
-                            true => (orig, new),
-                        };
+                        let (left, right) = if k { (orig, new) } else { (new, orig) };
                         *self = BinaryTree::Branch(Box::new(left), Box::new(right));
                     }
                     // Both reached the end, update (TODO)
