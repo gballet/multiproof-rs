@@ -73,6 +73,10 @@ See unit tests.
 
 ## Changelog
 
+### 0.1.5
+
+  * Export ByteKey to Vec<u8>
+
 ### 0.1.4
 
   * Support for binary trees

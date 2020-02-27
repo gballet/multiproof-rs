@@ -10,6 +10,12 @@ impl From<Vec<u8>> for ByteKey {
     }
 }
 
+impl Into<Vec<u8>> for ByteKey {
+    fn into(self) -> Vec<u8> {
+        self.0[..].to_vec()
+    }
+}
+
 impl From<ByteKey> for NibbleKey {
     fn from(address: ByteKey) -> Self {
         let mut nibbles = Vec::new();
