@@ -19,6 +19,15 @@ impl From<Vec<u8>> for NibbleKey {
     }
 }
 
+impl std::fmt::Display for NibbleKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for nibble in self.0.iter() {
+            write!(f, "{:x}", nibble)?;
+        }
+        Ok(())
+    }
+}
+
 impl From<&[u8]> for NibbleKey {
     fn from(nibbles: &[u8]) -> Self {
         NibbleKey::from(nibbles.to_vec())
@@ -218,5 +227,11 @@ mod tests {
     fn test_empty_prefix() {
         let nibbles = NibbleKey(vec![0xd, 0xe, 0xa, 0xd, 0xb, 0xe, 0xe, 0xf]);
         assert_eq!(nibbles[..0], vec![0u8; 0][..]);
+    }
+
+    #[test]
+    fn test_formatter() {
+        let nibbles = NibbleKey(vec![0xd, 0xe, 0xa, 0xd, 0xb, 0xe, 0xe, 0xf]);
+        assert_eq!(format!("{}", nibbles), "deadbeef")
     }
 }
