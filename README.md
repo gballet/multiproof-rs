@@ -76,6 +76,7 @@ See unit tests.
 ### 0.1.5
 
   * Export ByteKey to Vec<u8>
+  * Implement `fmt::Display` for `NibbleKey`
 
 ### 0.1.4
 
