@@ -58,6 +58,7 @@ impl std::fmt::Display for Multiproof {
 mod tests {
     use super::super::instruction::Instruction::*;
     use super::super::keys::NibbleKey;
+    use super::super::node::Node;
     use super::super::node::Node::*;
     use super::*;
 
@@ -78,6 +79,27 @@ mod tests {
                 instructions: vec![LEAF(0)]
             }
         )
+    }
+
+    #[test]
+    fn rlp_account_decode_multiproof() {
+        let mp = Multiproof {
+            hashes: vec![],
+            keyvals: vec![vec![
+                209, 131, 32, 0, 2, 140, 203, 132, 0, 0, 0, 2, 128, 130, 3, 232, 128, 0,
+            ]],
+            instructions: vec![LEAF(4)],
+        };
+
+        let trie: Node = mp.rebuild().unwrap();
+
+        assert_eq!(
+            trie,
+            Leaf(
+                NibbleKey::from(vec![0, 0, 0, 2]),
+                vec![203, 132, 0, 0, 0, 2, 128, 130, 3, 232, 128, 0]
+            )
+        );
     }
 
     #[test]
