@@ -73,6 +73,10 @@ See unit tests.
 
 ## Changelog
 
+### 0.1.6
+
+  * Fix a bug in even-length hex prefix calculations
+
 ### 0.1.5
 
   * Export ByteKey to Vec<u8>
