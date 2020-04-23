@@ -87,10 +87,6 @@ impl Tree<Node> for Node {
     fn insert(&mut self, key: &NibbleKey, value: Vec<u8>) -> Result<(), String> {
         use Node::*;
 
-        if key.is_empty() {
-            return Err("Attempted to insert a 0-byte key".to_string());
-        }
-
         match self {
             Leaf(leafkey, leafvalue) => {
                 // Find the common part of the current key with that of the
@@ -1060,5 +1056,17 @@ mod tests {
             .unwrap();
 
         assert_eq!(root, Leaf(NibbleKey::from(vec![1, 1, 1, 1]), vec![2, 2]));
+    }
+
+    #[test]
+    fn leaf_update_empty() {
+        let mut root = Node::default();
+        root.insert(&NibbleKey::from(vec![0u8, 0u8, 0u8, 1u8]), vec![1u8; 2])
+            .unwrap();
+        root.insert(&NibbleKey::from(vec![0u8, 0u8, 0u8, 2u8]), vec![1u8; 2])
+            .unwrap();
+
+        root.insert(&NibbleKey::from(vec![0u8, 0u8, 0u8, 1u8]), vec![2u8; 2])
+            .unwrap();
     }
 }
