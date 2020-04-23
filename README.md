@@ -73,6 +73,10 @@ See unit tests.
 
 ## Changelog
 
+### 0.1.7
+
+  * Accept the insertion of empty keys
+
 ### 0.1.6
 
   * Fix a bug in even-length hex prefix calculations

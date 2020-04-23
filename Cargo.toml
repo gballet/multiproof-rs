@@ -1,6 +1,6 @@
 [package]
 name = "multiproof-rs"
-version = "0.1.6"
+version = "0.1.7"
 authors = ["Guillaume Ballet <gballet@gmail.com>"]
 edition = "2018"
 license = "Apache-2.0"
