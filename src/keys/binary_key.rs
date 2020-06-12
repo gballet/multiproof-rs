@@ -1,11 +1,12 @@
-use super::Key;
+use super::{Key, KeyIterator};
 
 /// Represents a key whose basic unit is the bit. This is meant to be
 /// used at the key in binary trees.
 ///
 /// Bits are stored inside an array of bytes, and are read left to
 /// right. The structure also contains the start and end offset of
-/// the bit field.
+/// the bit field. The end offset points at the first byte _outside_
+/// of the bitfield.
 ///
 /// # Example structure
 ///
@@ -14,18 +15,18 @@ use super::Key;
 ///
 /// ```
 /// use multiproof_rs::keys::BinaryKey;
-/// let bitkey = BinaryKey::new(vec![0x55; 2], 3, 6);
+/// let bitkey = BinaryKey::new(vec![0x55; 2], 3, 9);
 /// ```
 ///
 /// The internal representation is therefore:
 ///
 /// ```text
 /// byte #    |     1        2
-/// bit  #    | 76543210 76543210
+/// bit  #    | 01234567 89012345
 /// ----------+------------------
 /// bit value | 01010101 01010101
-/// offsets   |     ^     ^
-///           |   start  end
+/// offsets   |    ^      ^
+///           |  start   end
 /// ```
 #[derive(Debug, PartialEq, Clone)]
 pub struct BinaryKey(Vec<u8>, usize, usize); // (key data, offset in first byte, offset in last byte)
@@ -38,7 +39,8 @@ impl BinaryKey {
 
 impl From<Vec<u8>> for BinaryKey {
     fn from(bytes: Vec<u8>) -> Self {
-        BinaryKey(bytes, 7usize, 0usize)
+        let bitlen = bytes.len() * 8;
+        BinaryKey(bytes, 0usize, bitlen)
     }
 }
 
@@ -48,34 +50,22 @@ impl From<&[u8]> for BinaryKey {
     }
 }
 
-impl Key<u8> for BinaryKey {
-    fn tail(&self) -> Self {
-        if self.0.is_empty() {
-            return BinaryKey(vec![], 7, 0);
-        }
-
-        // Last bit in the byte?
-        if self.1 == 0usize {
-            BinaryKey(self.0[1..].to_vec(), 7usize, self.2)
-        } else {
-            BinaryKey(self.0.clone(), self.1 - 1, self.2)
-        }
-    }
-
+impl Key<bool> for BinaryKey {
     fn len(&self) -> usize {
-        match self.0.len() {
-            0 => 0,
-            _ => (self.0.len() - 1) * 8 + self.1 + 1 - self.2,
+        if self.1 > self.2 {
+            0
+        } else {
+            self.2 - self.1
         }
     }
 
     fn is_empty(&self) -> bool {
-        self.0.len() == 0 || (self.0.len() == 1 && self.1 < self.2)
+        self.0.len() == 0 || (self.2 <= self.1)
     }
 }
 
 impl std::ops::Index<usize> for BinaryKey {
-    type Output = u8;
+    type Output = bool;
 
     #[inline]
     fn index(&self, i: usize) -> &Self::Output {
@@ -86,15 +76,24 @@ impl std::ops::Index<usize> for BinaryKey {
             panic!(format!("Invalid index {} into key {:?}", i, self.0));
         }
 
-        let shift = 7 - self.1;
-        let pos = shift + i;
+        let pos = self.1 + i;
         let byte = pos / 8;
         let offset = 7 - pos % 8;
 
         match (self.0[byte] >> offset) & 1 {
-            0 => &0u8,
-            _ => &1u8,
+            0 => &false,
+            _ => &true,
         }
+    }
+}
+
+impl<'a> From<KeyIterator<'a, bool, BinaryKey>> for BinaryKey {
+    fn from(it: KeyIterator<'a, bool, BinaryKey>) -> Self {
+        BinaryKey(
+            it.container.0[..].to_vec(),
+            it.container.1 + it.item_num,
+            it.container.2,
+        )
     }
 }
 
@@ -104,136 +103,70 @@ mod tests {
 
     #[test]
     fn test_iterate_over_one_byte() {
-        let mut key = BinaryKey::from(vec![0xFFu8]);
+        let key = BinaryKey::from(vec![0xFFu8]);
 
         assert_eq!(key.len(), 8);
-
-        let mut count = 0u32;
-        loop {
-            let tail = key.tail();
-            key = tail;
-            count += 1;
-            if key.is_empty() {
-                break;
-            }
-            assert!(count < 8);
-        }
-        assert_eq!(count, 8);
+        assert_eq!(key.iter().count(), 8);
     }
 
     #[test]
     fn test_iterate_over_two_bytes() {
-        let mut key = BinaryKey::from(vec![0xFFu8, 0xFFu8]);
+        let key = BinaryKey::from(vec![0xFFu8, 0xFFu8]);
 
         assert_eq!(key.len(), 16);
-
-        let mut count = 0u32;
-        loop {
-            let tail = key.tail();
-            key = tail;
-            count += 1;
-            if key.is_empty() {
-                break;
-            }
-            assert!(count < 16);
-        }
-        assert_eq!(count, 16);
+        assert_eq!(key.iter().count(), 16);
     }
 
     #[test]
     fn test_iterate_over_zero_bytes() {
-        let mut key = BinaryKey::from(vec![]);
+        let key = BinaryKey::from(vec![]);
 
         assert_eq!(key.len(), 0);
-
-        let mut count = 0u32;
-        loop {
-            let tail = key.tail();
-            assert_eq!(key.len(), 0);
-            key = tail;
-            count += 1;
-            if key.is_empty() {
-                break;
-            }
-            assert!(count < 2);
-        }
-        assert_eq!(count, 1);
+        assert_eq!(key.iter().count(), 0);
     }
 
     #[test]
     fn test_iterate_endianness() {
-        let mut key = BinaryKey::from(vec![0x55u8, 0x55u8]);
+        let key = BinaryKey::from(vec![0x55u8, 0x55u8]);
 
-        assert_eq!(key.len(), 16);
-
-        let mut count = 0u32;
-        loop {
-            let tail = key.tail();
-            key = tail;
-            count += 1;
-            if key.is_empty() {
-                break;
-            }
-            assert!(count < 16);
+        for (i, b) in key.iter().enumerate() {
+            assert_eq!(b, (key.len() - i) % 2 == 1);
         }
-        assert_eq!(count, 16);
     }
 
     #[test]
     fn test_unaligned_bitfield() {
         // 8 bit total:
-        // offset   | 76543210 76543210
+        // offset   | 01234567 89012345
         // ---------+------------------
         // bit      | 01011111 11110101
-        // pointers |     ^       ^
-        let mut key = BinaryKey(vec![0x5Fu8, 0xF5u8], 3, 4);
+        // pointers |     ^        ^
+        let key = BinaryKey(vec![0x5Fu8, 0xF5u8], 4, 12);
 
         assert_eq!(key.len(), 8);
-
-        let mut count = 0u32;
-        loop {
-            let tail = key.tail();
-            key = tail;
-            count += 1;
-            if key.is_empty() {
-                break;
-            }
-            assert!(count < 8);
-        }
-        assert_eq!(count, 8);
+        assert_eq!(key.iter().count(), 8);
     }
 
     #[test]
     fn test_unaligned_bitfield_one_byte() {
         // 4 bit total:
-        // offset   | 76543210
+        // offset   | 01234567
         // ---------+---------
         // bit      | 10000111
         // pointers |  ^  ^
-        let mut key = BinaryKey(vec![0x87u8], 6, 3);
+        let key = BinaryKey(vec![0x87u8], 3, 7);
 
         assert_eq!(key.len(), 4);
-
-        let mut count = 0u32;
-        loop {
-            let tail = key.tail();
-            key = tail;
-            count += 1;
-            if key.is_empty() {
-                break;
-            }
-            assert!(count < 4);
-        }
-        assert_eq!(count, 4);
+        assert_eq!(key.iter().count(), 4);
     }
 
     #[test]
     fn test_bit_index_one_byte() {
         let val = 0xFu8;
-        let key = BinaryKey(vec![val], 7, 0);
+        let key = BinaryKey(vec![val], 0, 8);
 
         for i in 0..8 {
-            let bit = (0xF0u8 >> i) & 1;
+            let bit = (0xF0u8 >> i) & 1 == 1;
             assert_eq!(key[i], bit);
         }
     }
@@ -241,48 +174,53 @@ mod tests {
     #[test]
     fn test_bit_index_one_byte_partial() {
         // 4 bit total:
-        // offset   | 76543210
+        // offset   | 01234567
         // ---------+---------
         // bit      | 01010101
         // pointers |  ^  ^
-        let key = BinaryKey(vec![0x55u8], 6, 3);
+        let key = BinaryKey(vec![0x55u8], 1, 4);
 
         for i in 0..3 {
-            let bit = (5u8 >> i) & 1;
+            let bit = (5u8 >> i) & 1 == 1;
             assert_eq!(key[i], bit);
         }
     }
 
     #[test]
     fn test_bit_index_two_bytes() {
-        let key = BinaryKey(vec![0xFu8; 2], 7, 0);
+        // 7 bit total:
+        // offset   | 01234567 01234567
+        // ---------+------------------
+        // bit      | 00001111 00001111
+        // pointers | ^                ^
+        let key = BinaryKey(vec![0xFu8; 2], 0, 16);
 
         for i in 0..16 {
-            let bit = ((0xF0F0u16 >> i) & 1) as u8;
+            let bit = (i % 8) >= 4;
             assert_eq!(key[i], bit);
         }
     }
 
     #[test]
     fn test_bit_index_three_bytes() {
-        let key = BinaryKey(vec![0xFu8; 3], 7, 0);
+        let key = BinaryKey(vec![0xFu8; 3], 0, 24);
 
         for i in 0..24 {
-            let bit = ((0xF0F0F0u32 >> i) & 1) as u8;
+            let bit = ((0xF0F0F0u32 >> i) & 1) == 1;
             assert_eq!(key[i], bit);
         }
     }
 
     #[test]
     fn test_bit_index_one_bit() {
-        let key = BinaryKey(vec![0xFu8], 3, 3);
-        assert_eq!(key[0], 1);
+        let key = BinaryKey(vec![0xFu8], 4, 5);
+        assert_eq!(key[0], true);
     }
 
     #[test]
     #[should_panic(expected = "Invalid index 0 into key")]
     fn test_bit_index_no_bits() {
-        let key = BinaryKey(vec![0xFu8], 3, 4);
+        let key = BinaryKey(vec![0xFu8], 3, 3);
 
         key[0];
     }
