@@ -73,6 +73,13 @@ See unit tests.
 
 ## Changelog
 
+### 0.1.8
+
+  * `keys` method on `Node` in order to get the list of keys present in the tree.
+  * Fixes #61 - if several keys have the same prefix leading to a `Leaf` object,
+    don't return an error; instead, add that key to the proof, as a proof that
+    all the extra keys are missing.
+
 ### 0.1.7
 
   * Accept the insertion of empty keys
