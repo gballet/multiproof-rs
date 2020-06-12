@@ -358,6 +358,42 @@ impl std::ops::Index<&NibbleKey> for Node {
 }
 
 impl Node {
+    pub fn keys(&self) -> Vec<NibbleKey> {
+        self.keys_helper(Vec::new())
+    }
+
+    fn keys_helper(&self, sofar: Vec<u8>) -> Vec<NibbleKey> {
+        match self {
+            Node::EmptySlot => Vec::new(),
+            Node::Hash(_) => Vec::new(),
+            Node::Extension(ref ext, ref child) => {
+                let mut child_sofar = sofar.clone();
+                let ext_vec: Vec<u8> = ext.clone().into();
+                child_sofar.extend(ext_vec.iter());
+                child.keys_helper(child_sofar)
+            }
+            Node::Branch(ref children) => {
+                let mut keys = Vec::new();
+                for (nibble, child) in children.iter().enumerate() {
+                    let mut child_sofar = sofar.clone();
+                    child_sofar.push(nibble as u8);
+                    let mut child_keys = child.keys_helper(child_sofar);
+                    if child_keys.len() > 0 {
+                        keys.append(&mut child_keys);
+                    }
+                }
+                return keys;
+            }
+            Node::Leaf(ref k, _) => {
+                let mut key = sofar.clone();
+                if k.len() > 0 {
+                    let k_vec: Vec<u8> = k.clone().into();
+                    key.extend(k_vec);
+                }
+                vec![NibbleKey::from(key)]
+            }
+        }
+    }
     pub fn graphviz(&self) -> String {
         let (nodes, refs) = self.graphviz_rec(NibbleKey::from(vec![]), String::from("root"));
         format!(
@@ -1068,5 +1104,58 @@ mod tests {
 
         root.insert(&NibbleKey::from(vec![0u8, 0u8, 0u8, 1u8]), vec![2u8; 2])
             .unwrap();
+    }
+
+    #[test]
+    fn keys_none() {
+        let root = Node::default();
+        assert_eq!(root.keys().len(), 0)
+    }
+
+    #[test]
+    fn keys_leaves_no_key_part() {
+        let mut root = Node::default();
+        root.insert(&NibbleKey::from(vec![0u8, 0u8, 0u8, 1u8]), vec![1u8; 2])
+            .unwrap();
+        root.insert(&NibbleKey::from(vec![0u8, 0u8, 0u8, 2u8]), vec![1u8; 2])
+            .unwrap();
+        root.insert(&NibbleKey::from(vec![0u8, 0u8, 0u8, 4u8]), vec![2u8; 2])
+            .unwrap();
+
+        let keys = root.keys();
+
+        assert_eq!(keys.len(), 3);
+
+        assert_eq!(
+            keys,
+            vec![
+                NibbleKey::from(vec![0u8, 0u8, 0u8, 1u8]),
+                NibbleKey::from(vec![0u8, 0u8, 0u8, 2u8]),
+                NibbleKey::from(vec![0u8, 0u8, 0u8, 4u8]),
+            ]
+        );
+    }
+
+    #[test]
+    fn keys_leaves_with_key_part() {
+        let mut root = Node::default();
+        root.insert(&NibbleKey::from(vec![0u8, 1u8, 0u8, 0u8]), vec![1u8; 2])
+            .unwrap();
+        root.insert(&NibbleKey::from(vec![0u8, 2u8, 0u8, 0u8]), vec![1u8; 2])
+            .unwrap();
+        root.insert(&NibbleKey::from(vec![0u8, 4u8, 0u8, 0u8]), vec![2u8; 2])
+            .unwrap();
+
+        let keys = root.keys();
+
+        assert_eq!(keys.len(), 3);
+        assert_eq!(
+            keys,
+            vec![
+                NibbleKey::from(vec![0u8, 1u8, 0u8, 0u8]),
+                NibbleKey::from(vec![0u8, 2u8, 0u8, 0u8]),
+                NibbleKey::from(vec![0u8, 4u8, 0u8, 0u8]),
+            ]
+        );
     }
 }
