@@ -187,17 +187,6 @@ pub fn make_multiproof(root: &Node, keys: Vec<NibbleKey>) -> Result<Multiproof, 
             }
         }
         Leaf(leafkey, leafval) => {
-            // This is the simplest case: the key that is found at this
-            // level in the recursion needs to match the unique one in
-            // the list of keys that belong to the proof.
-            if keys.len() != 1 {
-                return Err(format!(
-                    "Expecting exactly 1 key in leaf, got {}: {:?}",
-                    keys.len(),
-                    keys
-                ));
-            }
-
             // Here two things can happen:
             // 1. The key suffix is the same as the one in the leaf,
             //    so that leaf is added to the proof.
@@ -953,6 +942,32 @@ mod tests {
         root.insert(k3, vec![0u8; 32]).unwrap();
 
         assert!(!root.has_key(k1));
+    }
+
+    #[test]
+    fn multiple_keys_with_existing_one() {
+        let mut root = Node::default();
+        let k1 = NibbleKey::from(ByteKey::from(
+            hex::decode("11111111111111110000000000000000").unwrap(),
+        ));
+        let k2 = NibbleKey::from(ByteKey::from(
+            hex::decode("01111111111111110000000000000000").unwrap(),
+        ));
+        let k3 = NibbleKey::from(ByteKey::from(
+            hex::decode("11111111111111111111111111111111").unwrap(),
+        ));
+        let k4 = NibbleKey::from(ByteKey::from(
+            hex::decode("11111111111111112222222222222222").unwrap(),
+        ));
+
+        root.insert(&k1, vec![0u8; 32]).unwrap();
+        root.insert(&k2, vec![0u8; 32]).unwrap();
+
+        let proof = make_multiproof(&root, vec![k1, k3.clone(), k4.clone()]).unwrap();
+
+        let trie: Node = proof.rebuild().unwrap();
+        assert!(!trie.has_key(&k3));
+        assert!(!trie.has_key(&k4));
     }
 
     #[test]
