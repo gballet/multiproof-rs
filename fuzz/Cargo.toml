@@ -1,0 +1,30 @@
+
+[package]
+name = "multiproof-rs-fuzz"
+version = "0.0.0"
+authors = ["Automatically generated"]
+publish = false
+edition = "2018"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = { version = "0.3", features = ["arbitrary-derive"] }
+multiproof-rs = { path="..", features = ["arbitrary"] }
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "nibblekey"
+path = "fuzz_targets/nibblekey.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "hexary_trie"
+path = "fuzz_targets/hexary_trie.rs"
+test = false
+doc = false

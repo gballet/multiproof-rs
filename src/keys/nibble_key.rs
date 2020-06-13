@@ -6,6 +6,7 @@ use super::Key;
 /// Internally, nibbles are stored in a byte array, with each byte
 /// having its most significant nibble set to 0.
 #[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct NibbleKey(Vec<u8>);
 
 impl From<Vec<u8>> for NibbleKey {
