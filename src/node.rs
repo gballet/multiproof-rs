@@ -89,6 +89,13 @@ impl Tree<Node> for Node {
 
         match self {
             Leaf(leafkey, leafvalue) => {
+                // Check keys have the same lengths. The case in which
+                // intermediate nodes can have values is not supported,
+                // so an error is returned.
+                if leafkey.len() != key.len() {
+                    return Err(format!("Keys are of different length"));
+                }
+
                 // Find the common part of the current key with that of the
                 // leaf and create an intermediate full node.
                 let firstdiffindex = leafkey.factor_length(key);
@@ -1156,6 +1163,32 @@ mod tests {
                 NibbleKey::from(vec![0u8, 2u8, 0u8, 0u8]),
                 NibbleKey::from(vec![0u8, 4u8, 0u8, 0u8]),
             ]
+        );
+    }
+
+    #[test]
+    fn keys_with_different_lengths() {
+        let mut root = Node::default();
+        assert_eq!(
+            root.insert(&NibbleKey::from(vec![0u8, 1u8, 0u8, 0u8]), vec![1u8; 2]),
+            Ok(())
+        );
+        assert_eq!(
+            root.insert(&NibbleKey::from(vec![0u8, 1u8, 0u8]), vec![1u8; 2]),
+            Err(format!("Keys are of different length"))
+        );
+    }
+
+    #[test]
+    fn truncated_key() {
+        let mut root = Node::default();
+        assert_eq!(
+            root.insert(&NibbleKey::from(vec![0u8, 1u8, 0u8, 0u8]), vec![1u8; 2]),
+            Ok(())
+        );
+        assert_eq!(
+            root.insert(&NibbleKey::from(vec![0u8, 1u8]), vec![1u8; 2]),
+            Err(format!("Keys are of different length"))
         );
     }
 }
