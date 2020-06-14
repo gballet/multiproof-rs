@@ -130,6 +130,17 @@ impl Tree<Node> for Node {
                 Ok(())
             }
             Extension(extkey, box child) => {
+                // Internal nodes with a value are not supported, so in
+                // the case when the length of the inserted key is less
+                // than that of the extension, report an error.
+                // When/If internal nodes with values are supported, an
+                // intermediate full node should be created.
+                if key.len() < extkey.len() {
+                    return Err(format!(
+                        "key.len() < ext.len(): valued internal nodes are not supported"
+                    ));
+                }
+
                 // Find the common part of the current key with that of the
                 // extension and create an intermediate full node.
                 let firstdiffindex = extkey.factor_length(&key.clone());
@@ -1189,6 +1200,25 @@ mod tests {
         assert_eq!(
             root.insert(&NibbleKey::from(vec![0u8, 1u8]), vec![1u8; 2]),
             Err(format!("Keys are of different length"))
+        );
+    }
+
+    #[test]
+    fn truncated_key_in_branch() {
+        let mut root = Node::default();
+        assert_eq!(
+            root.insert(&NibbleKey::from(vec![0u8, 1u8, 0u8, 0u8]), vec![1u8; 2]),
+            Ok(())
+        );
+        assert_eq!(
+            root.insert(&NibbleKey::from(vec![0u8, 1u8, 0u8, 1u8]), vec![1u8; 2]),
+            Ok(())
+        );
+        assert_eq!(
+            root.insert(&NibbleKey::from(vec![]), vec![1u8; 2]),
+            Err(format!(
+                "key.len() < ext.len(): valued internal nodes are not supported"
+            ))
         );
     }
 }
