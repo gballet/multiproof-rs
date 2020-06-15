@@ -410,7 +410,7 @@ impl Node {
                         keys.append(&mut child_keys);
                     }
                 }
-                return keys;
+                keys
             }
             Node::Leaf(ref k, _) => {
                 let mut key = sofar.clone();

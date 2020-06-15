@@ -9,8 +9,8 @@ jobs:
       - run:
            name: Setup environment
            command: |
-             rustup toolchain install nightly-2019-09-05
-             rustup default nightly-2019-09-05
+             rustup toolchain install nightly-2020-06-10
+             rustup default nightly-2020-06-10
              rustup component add rustfmt
              rustup component add clippy
              rustup update
