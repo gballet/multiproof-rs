@@ -93,7 +93,7 @@ impl Tree<Node> for Node {
                 // intermediate nodes can have values is not supported,
                 // so an error is returned.
                 if leafkey.len() != key.len() {
-                    return Err(format!("Keys are of different length"));
+                    return Err("Keys are of different length".to_string());
                 }
 
                 // Find the common part of the current key with that of the
@@ -136,9 +136,10 @@ impl Tree<Node> for Node {
                 // When/If internal nodes with values are supported, an
                 // intermediate full node should be created.
                 if key.len() < extkey.len() {
-                    return Err(format!(
+                    return Err(
                         "key.len() < ext.len(): valued internal nodes are not supported"
-                    ));
+                            .to_string(),
+                    );
                 }
 
                 // Find the common part of the current key with that of the
@@ -209,9 +210,10 @@ impl Tree<Node> for Node {
                 // When/If internal nodes with values are supported, an
                 // intermediate full node should be created.
                 if key.len() == 0 {
-                    return Err(format!(
+                    return Err(
                         "key.len() == 0 in branch: valued internal nodes are not supported"
-                    ));
+                            .to_string(),
+                    );
                 }
                 let idx = key[0] as usize;
                 // If the slot isn't yet in use, fill it, and otherwise,
@@ -395,7 +397,7 @@ impl Node {
             Node::EmptySlot => Vec::new(),
             Node::Hash(_) => Vec::new(),
             Node::Extension(ref ext, ref child) => {
-                let mut child_sofar = sofar.clone();
+                let mut child_sofar = sofar;
                 let ext_vec: Vec<u8> = ext.clone().into();
                 child_sofar.extend(ext_vec.iter());
                 child.keys_helper(child_sofar)
@@ -406,14 +408,14 @@ impl Node {
                     let mut child_sofar = sofar.clone();
                     child_sofar.push(nibble as u8);
                     let mut child_keys = child.keys_helper(child_sofar);
-                    if child_keys.len() > 0 {
+                    if !child_keys.is_empty() {
                         keys.append(&mut child_keys);
                     }
                 }
                 keys
             }
             Node::Leaf(ref k, _) => {
-                let mut key = sofar.clone();
+                let mut key = sofar;
                 if k.len() > 0 {
                     let k_vec: Vec<u8> = k.clone().into();
                     key.extend(k_vec);
