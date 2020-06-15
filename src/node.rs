@@ -203,6 +203,16 @@ impl Tree<Node> for Node {
                 Ok(())
             }
             Branch(ref mut vec) => {
+                // Internal nodes with a value are not supported, so in
+                // the case when the length of the inserted key is less
+                // than that of the extension, report an error.
+                // When/If internal nodes with values are supported, an
+                // intermediate full node should be created.
+                if key.len() == 0 {
+                    return Err(format!(
+                        "key.len() == 0 in branch: valued internal nodes are not supported"
+                    ));
+                }
                 let idx = key[0] as usize;
                 // If the slot isn't yet in use, fill it, and otherwise,
                 // recurse into the child node.
@@ -1204,7 +1214,7 @@ mod tests {
     }
 
     #[test]
-    fn truncated_key_in_branch() {
+    fn truncated_key_in_ext() {
         let mut root = Node::default();
         assert_eq!(
             root.insert(&NibbleKey::from(vec![0u8, 1u8, 0u8, 0u8]), vec![1u8; 2]),
@@ -1218,6 +1228,25 @@ mod tests {
             root.insert(&NibbleKey::from(vec![]), vec![1u8; 2]),
             Err(format!(
                 "key.len() < ext.len(): valued internal nodes are not supported"
+            ))
+        );
+    }
+
+    #[test]
+    fn truncated_key_in_branch() {
+        let mut root = Node::default();
+        assert_eq!(
+            root.insert(&NibbleKey::from(vec![0u8, 1u8, 0u8, 0u8]), vec![1u8; 2]),
+            Ok(())
+        );
+        assert_eq!(
+            root.insert(&NibbleKey::from(vec![2u8, 1u8, 0u8, 1u8]), vec![1u8; 2]),
+            Ok(())
+        );
+        assert_eq!(
+            root.insert(&NibbleKey::from(vec![]), vec![1u8; 2]),
+            Err(format!(
+                "key.len() == 0 in branch: valued internal nodes are not supported"
             ))
         );
     }
