@@ -40,11 +40,7 @@ impl Tree<BinaryTree> for BinaryTree {
 
     fn ith_child(&self, index: usize) -> Option<&Self> {
         if index >= self.num_children() {
-            panic!(format!(
-                "Requested child number #{}, only have #{}",
-                index,
-                self.num_children()
-            ));
+            return None;
         }
 
         match self {
