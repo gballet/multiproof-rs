@@ -235,3 +235,36 @@ impl Default for BinaryExtTree {
         BinaryExtTree::EmptyChild
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::BinaryExtTree::*;
+    use super::*;
+
+    #[test]
+    fn simple_insert() {
+        let mut root = EmptyChild;
+
+        root.insert(&BinaryKey::from(vec![5u8; 32]), vec![10; 32])
+            .unwrap();
+
+        assert_eq!(root, Leaf(BinaryKey::from(vec![5u8; 32]), vec![10; 32]));
+    }
+
+    #[test]
+    fn insert_branch() {
+        let mut root = BinaryExtTree::new_branch();
+
+        root.insert(&BinaryKey::from(vec![5u8; 32]), vec![10; 32])
+            .unwrap();
+
+        assert_eq!(
+            root,
+            Branch(
+                BinaryKey::new(vec![], 0, 0),
+                Box::new(Leaf(BinaryKey::new(vec![5u8; 32], 6, 0), vec![10; 32])),
+                Box::new(EmptyChild)
+            )
+        );
+    }
+}
