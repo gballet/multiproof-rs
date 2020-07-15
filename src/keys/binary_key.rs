@@ -1,5 +1,21 @@
 use super::Key;
 
+pub struct BinaryKeyIterator<'a>(&'a BinaryKey, usize);
+
+impl<'a> Iterator for BinaryKeyIterator<'a> {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<u8> {
+        if self.1 >= self.0.len() {
+            None
+        } else {
+            let idx = self.1;
+            self.1 += 1;
+            Some(self.0[idx])
+        }
+    }
+}
+
 /// Represents a key whose basic unit is the bit. This is meant to be
 /// used at the key in binary trees.
 ///
@@ -33,6 +49,10 @@ pub struct BinaryKey(Vec<u8>, usize, usize); // (key data, offset in first byte,
 impl BinaryKey {
     pub fn new(data: Vec<u8>, start: usize, end: usize) -> Self {
         BinaryKey(data, start, end)
+    }
+
+    pub fn iter(&self) -> BinaryKeyIterator {
+        BinaryKeyIterator(&self, 0)
     }
 }
 
@@ -95,6 +115,15 @@ impl std::ops::Index<usize> for BinaryKey {
             0 => &0u8,
             _ => &1u8,
         }
+    }
+}
+
+impl std::ops::Index<std::ops::Range<usize>> for BinaryKey {
+    type Output = BinaryKey;
+
+    #[inline]
+    fn index(&self, r: std::ops::Range<usize>) -> &BinaryKey {
+        &BinaryKey(self.0, self.1 + r.start, self.2 - r.start)
     }
 }
 
