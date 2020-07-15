@@ -146,10 +146,11 @@ impl Tree<BinaryExtTree> for BinaryExtTree {
                     }
                 }
 
+                let child_prefix = key.suffix(prefix.len() - 1);
                 if key[prefix.len()] == 0 {
-                    l.insert(&key.tail(), value)
+                    l.insert(&child_prefix, value)
                 } else {
-                    r.insert(&key.tail(), value)
+                    r.insert(&child_prefix, value)
                 }
             }
             BinaryExtTree::EmptyChild => {
