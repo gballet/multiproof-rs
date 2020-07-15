@@ -118,15 +118,6 @@ impl std::ops::Index<usize> for BinaryKey {
     }
 }
 
-impl std::ops::Index<std::ops::Range<usize>> for BinaryKey {
-    type Output = BinaryKey;
-
-    #[inline]
-    fn index(&self, r: std::ops::Range<usize>) -> &BinaryKey {
-        &BinaryKey(self.0, self.1 + r.start, self.2 - r.start)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
