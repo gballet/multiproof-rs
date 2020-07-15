@@ -54,6 +54,19 @@ impl BinaryKey {
     pub fn iter(&self) -> BinaryKeyIterator {
         BinaryKeyIterator(&self, 0)
     }
+
+    pub fn split(&self, idx: usize) -> (BinaryKey, BinaryKey) {
+        let old_end = self.2;
+
+        (
+            BinaryKey(self.0[..].to_vec(), self.1, idx),
+            BinaryKey(self.0[..].to_vec(), idx + 1, old_end),
+        )
+    }
+
+    pub fn suffix(&self, idx: usize) -> BinaryKey {
+        BinaryKey(self.0[..].to_vec(), idx + 1, self.2)
+    }
 }
 
 impl From<Vec<u8>> for BinaryKey {
