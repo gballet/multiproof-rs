@@ -2,6 +2,7 @@ extern crate sha3;
 
 use super::keys::*;
 use super::tree::*;
+use sha3::{Digest, Keccak256};
 
 // Binary tries with extensions as described in https://ethresear.ch/t/binary-trie-format/7621/6
 #[derive(Debug, Clone, PartialEq)]
@@ -10,6 +11,36 @@ pub enum BinaryExtTree {
     Leaf(BinaryKey, Vec<u8>),
     Branch(BinaryKey, Box<BinaryExtTree>, Box<BinaryExtTree>),
     EmptyChild,
+}
+
+impl BinaryExtTree {
+    pub fn hash(&self) -> Vec<u8> {
+        match self {
+            BinaryExtTree::Hash(h) => h.to_vec(),
+            BinaryExtTree::Leaf(key, val) => {
+                let mut keccak256 = Keccak256::new();
+                keccak256.input(vec![0u8]);
+                keccak256.input(val);
+                let h = keccak256.result_reset();
+                keccak256.input::<Vec<u8>>(key.into());
+                keccak256.input(h.to_vec());
+                keccak256.result().to_vec()
+            }
+            BinaryExtTree::Branch(prefix, box left, box right) => {
+                let mut keccak256 = Keccak256::new();
+                keccak256.input(left.hash());
+                keccak256.input(right.hash());
+                let h = keccak256.result_reset();
+                keccak256.input::<Vec<u8>>(prefix.into());
+                keccak256.input(h);
+                keccak256.result().to_vec()
+            }
+            BinaryExtTree::EmptyChild => {
+                let keccak256 = Keccak256::new();
+                keccak256.result().to_vec()
+            }
+        }
+    }
 }
 
 impl NodeType for BinaryExtTree {

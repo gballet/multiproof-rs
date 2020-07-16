@@ -97,6 +97,19 @@ impl From<&[u8]> for BinaryKey {
     }
 }
 
+impl Into<Vec<u8>> for &BinaryKey {
+    fn into(self) -> Vec<u8> {
+        let mut ret = vec![0u8; self.len() / 8];
+        for (i, b) in self.iter().enumerate() {
+            if b {
+                ret[i / 8] |= 1 << (7 - i)
+            }
+        }
+
+        ret
+    }
+}
+
 impl Key<bool> for BinaryKey {
     fn tail(&self) -> Self {
         BinaryKey(self.0[..].to_vec(), self.1 + 1, self.2)
