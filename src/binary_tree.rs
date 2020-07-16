@@ -211,7 +211,7 @@ mod tests {
         assert_eq!(
             root,
             Branch(
-                Box::new(Leaf(BinaryKey::new(vec![5u8; 32], 6, 0), vec![10; 32])),
+                Box::new(Leaf(BinaryKey::new(vec![5u8; 32], 1, 256), vec![10; 32])),
                 Box::new(EmptyChild)
             )
         );
@@ -230,8 +230,8 @@ mod tests {
                 Box::new(Branch(
                     Box::new(EmptyChild),
                     Box::new(Branch(
-                        Box::new(Leaf(BinaryKey::new(vec![0x55u8; 32], 4, 0), vec![10; 32])),
-                        Box::new(Leaf(BinaryKey::new(vec![0x66u8; 32], 4, 0), vec![10; 32])),
+                        Box::new(Leaf(BinaryKey::new(vec![0x55u8; 32], 3, 256), vec![10; 32])),
+                        Box::new(Leaf(BinaryKey::new(vec![0x66u8; 32], 3, 256), vec![10; 32])),
                     )),
                 )),
                 Box::new(EmptyChild)

@@ -86,7 +86,8 @@ impl PartialEq for BinaryKey {
 
 impl From<Vec<u8>> for BinaryKey {
     fn from(bytes: Vec<u8>) -> Self {
-        BinaryKey(bytes, 7usize, 0usize)
+        let bitlen = 8 * bytes.len();
+        BinaryKey(bytes, 0usize, bitlen as usize)
     }
 }
 
@@ -150,13 +151,28 @@ mod tests {
 
     #[test]
     fn test_equality() {
-        assert!(
-            BinaryKey(vec![0, 0, 1, 2, 3, 0], 16, 41) == BinaryKey(vec![0, 1, 2, 3, 0, 0], 8, 33)
+        assert_eq!(
+            BinaryKey(vec![0, 0, 1, 2, 3, 0], 16, 41),
+            BinaryKey(vec![0, 1, 2, 3, 0, 0], 8, 33)
         );
     }
 
     #[test]
     fn test_alignment() {
         assert_eq!(BinaryKey(vec![5], 0, 8), BinaryKey(vec![2, 128], 1, 9));
+    }
+
+    #[test]
+    fn test_suffix() {
+        let k = BinaryKey(vec![0x55], 0, 8);
+        let s = k.suffix(2);
+        assert_eq!(BinaryKey(vec![0x55], 3, 8), s);
+    }
+    #[test]
+    fn test_split() {
+        let k = BinaryKey(vec![0x55], 0, 8);
+        let (p, s) = k.split(4);
+        assert_eq!(BinaryKey(vec![0x55], 5, 8), s);
+        assert_eq!(BinaryKey(vec![0x55], 0, 4), p);
     }
 }
