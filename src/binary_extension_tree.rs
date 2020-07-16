@@ -268,4 +268,42 @@ mod tests {
             )
         );
     }
+
+    #[test]
+    fn insert_branch_with_prefix() {
+        let mut root = Branch(
+            BinaryKey::new(vec![5u8; 32], 0, 15),
+            Box::new(EmptyChild),
+            Box::new(EmptyChild),
+        );
+
+        root.insert(&BinaryKey::from(vec![5u8; 32]), vec![10; 32])
+            .unwrap();
+
+        assert_eq!(
+            root,
+            Branch(
+                BinaryKey::new(vec![5u8; 32], 0, 15),
+                Box::new(Leaf(BinaryKey::new(vec![5u8; 32], 16, 256), vec![10; 32])),
+                Box::new(EmptyChild)
+            )
+        );
+    }
+
+    #[test]
+    fn insert_leaf() {
+        let mut root = BinaryExtTree::new_leaf(vec![0x66u8; 32], vec![10; 32]);
+
+        root.insert(&BinaryKey::from(vec![0x55u8; 32]), vec![10; 32])
+            .unwrap();
+
+        assert_eq!(
+            root,
+            Branch(
+                BinaryKey::new(vec![0x55u8; 32], 0, 2),
+                Box::new(Leaf(BinaryKey::new(vec![0x55u8; 32], 3, 256), vec![10; 32])),
+                Box::new(Leaf(BinaryKey::new(vec![0x66u8; 32], 3, 256), vec![10; 32]))
+            )
+        );
+    }
 }

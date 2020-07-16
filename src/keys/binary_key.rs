@@ -127,7 +127,7 @@ impl std::ops::Index<usize> for BinaryKey {
             panic!(format!("Invalid index {} into key {:?}", i, self.0));
         }
 
-        let offset = 7 - self.1 % 8;
+        let offset = 7 - i % 8;
         let byte = i / 8;
 
         match (self.0[byte] >> offset) & 1 {

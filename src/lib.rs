@@ -4,7 +4,6 @@ extern crate rlp;
 extern crate sha3;
 
 pub mod binary_extension_tree;
-pub mod binary_tree;
 pub mod instruction;
 pub mod keys;
 pub mod multiproof;
