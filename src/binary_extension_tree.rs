@@ -146,7 +146,7 @@ impl Tree<BinaryExtTree> for BinaryExtTree {
                     }
                 }
 
-                let child_prefix = key.suffix(prefix.len() - 1);
+                let child_prefix = key.suffix(prefix.len());
                 if key[prefix.len()] == 0 {
                     l.insert(&child_prefix, value)
                 } else {
@@ -263,7 +263,7 @@ mod tests {
             root,
             Branch(
                 BinaryKey::new(vec![], 0, 0),
-                Box::new(Leaf(BinaryKey::new(vec![5u8; 32], 6, 0), vec![10; 32])),
+                Box::new(Leaf(BinaryKey::new(vec![5u8; 32], 1, 256), vec![10; 32])),
                 Box::new(EmptyChild)
             )
         );
