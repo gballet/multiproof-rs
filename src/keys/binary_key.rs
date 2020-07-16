@@ -80,7 +80,7 @@ impl PartialEq for BinaryKey {
                 return false;
             }
         }
-        return true;
+        true
     }
 }
 
@@ -104,9 +104,9 @@ impl Key<bool> for BinaryKey {
 
     fn len(&self) -> usize {
         if self.0.len() == 0 || self.2 <= self.1 {
-            return 0;
+            0
         } else {
-            return self.2 - self.1;
+            self.2 - self.1
         }
     }
 
