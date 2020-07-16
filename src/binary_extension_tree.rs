@@ -95,15 +95,16 @@ impl Tree<BinaryExtTree> for BinaryExtTree {
                     if key[i] != b {
                         let (parent_prefix, child_prefix) = leafkey.split(i);
                         let new_key = key.suffix(i);
-                        let (left, right) = match b {
-                            0 => (
-                                BinaryExtTree::Leaf(child_prefix, leafvalue[..].to_vec()),
-                                BinaryExtTree::Leaf(new_key, value),
-                            ),
-                            _ => (
+                        let (left, right) = if b {
+                            (
                                 BinaryExtTree::Leaf(new_key, value),
                                 BinaryExtTree::Leaf(child_prefix, leafvalue[..].to_vec()),
-                            ),
+                            )
+                        } else {
+                            (
+                                BinaryExtTree::Leaf(child_prefix, leafvalue[..].to_vec()),
+                                BinaryExtTree::Leaf(new_key, value),
+                            )
                         };
                         *self =
                             BinaryExtTree::Branch(parent_prefix, Box::new(left), Box::new(right));
@@ -121,7 +122,7 @@ impl Tree<BinaryExtTree> for BinaryExtTree {
                     if key[i] != b {
                         let (parent_prefix, child_prefix) = prefix.split(i);
                         let new_key = key.suffix(i);
-                        let (left, right) = if b == 0 {
+                        let (left, right) = if b {
                             (
                                 BinaryExtTree::Branch(
                                     child_prefix,
@@ -147,10 +148,10 @@ impl Tree<BinaryExtTree> for BinaryExtTree {
                 }
 
                 let child_prefix = key.suffix(prefix.len());
-                if key[prefix.len()] == 0 {
-                    l.insert(&child_prefix, value)
-                } else {
+                if key[prefix.len()] {
                     r.insert(&child_prefix, value)
+                } else {
+                    l.insert(&child_prefix, value)
                 }
             }
             BinaryExtTree::EmptyChild => {
@@ -178,10 +179,10 @@ impl Tree<BinaryExtTree> for BinaryExtTree {
                     child_key = child_key.tail();
                 }
 
-                if key[prefix.len()] == 0 {
-                    left.has_key(&child_key)
-                } else {
+                if key[prefix.len()] {
                     right.has_key(&child_key)
+                } else {
+                    left.has_key(&child_key)
                 }
             }
             BinaryExtTree::EmptyChild => false,
@@ -284,8 +285,8 @@ mod tests {
             root,
             Branch(
                 BinaryKey::new(vec![5u8; 32], 0, 15),
+                Box::new(EmptyChild),
                 Box::new(Leaf(BinaryKey::new(vec![5u8; 32], 16, 256), vec![10; 32])),
-                Box::new(EmptyChild)
             )
         );
     }

@@ -3,9 +3,9 @@ use super::Key;
 pub struct BinaryKeyIterator<'a>(&'a BinaryKey, usize);
 
 impl<'a> Iterator for BinaryKeyIterator<'a> {
-    type Item = u8;
+    type Item = bool;
 
-    fn next(&mut self) -> Option<u8> {
+    fn next(&mut self) -> Option<bool> {
         if self.1 >= self.0.len() {
             None
         } else {
@@ -97,7 +97,7 @@ impl From<&[u8]> for BinaryKey {
     }
 }
 
-impl Key<u8> for BinaryKey {
+impl Key<bool> for BinaryKey {
     fn tail(&self) -> Self {
         BinaryKey(self.0[..].to_vec(), self.1 + 1, self.2)
     }
@@ -116,7 +116,7 @@ impl Key<u8> for BinaryKey {
 }
 
 impl std::ops::Index<usize> for BinaryKey {
-    type Output = u8;
+    type Output = bool;
 
     #[inline]
     fn index(&self, i: usize) -> &Self::Output {
@@ -127,12 +127,13 @@ impl std::ops::Index<usize> for BinaryKey {
             panic!(format!("Invalid index {} into key {:?}", i, self.0));
         }
 
-        let offset = 7 - i % 8;
-        let byte = i / 8;
+        let offset = 7 - (i + self.1) % 8;
+        let byte = (i + self.1) / 8;
 
-        match (self.0[byte] >> offset) & 1 {
-            0 => &0u8,
-            _ => &1u8,
+        if ((self.0[byte] >> offset) & 1) == 0 {
+            &false
+        } else {
+            &true
         }
     }
 }
