@@ -116,7 +116,7 @@ impl Key<bool> for BinaryKey {
     }
 
     fn len(&self) -> usize {
-        if self.0.len() == 0 || self.2 <= self.1 {
+        if self.0.is_empty() || self.2 <= self.1 {
             0
         } else {
             self.2 - self.1
