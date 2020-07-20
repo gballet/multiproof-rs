@@ -1,5 +1,6 @@
 extern crate sha3;
 
+use super::hashable::Hashable;
 use super::keys::*;
 use super::tree::*;
 use sha3::{Digest, Keccak256};
@@ -39,6 +40,50 @@ impl BinaryExtTree {
                 let h = keccak256.result_reset();
                 keccak256.input::<Vec<u8>>(prefix.into());
                 keccak256.input(h);
+                keccak256.result().to_vec()
+            }
+            BinaryExtTree::EmptyChild => {
+                let keccak256 = Keccak256::new();
+                keccak256.result().to_vec()
+            }
+        }
+    }
+
+    fn hash_m3(&self) -> Vec<u8> {
+        self.hash_m3_helper(Vec::new())
+    }
+
+    fn hash_m3_helper(&self, bits: Vec<bool>) -> Vec<u8> {
+        match self {
+            BinaryExtTree::Hash(h) => h.to_vec(),
+            BinaryExtTree::Leaf(key, val) => {
+                // Add all the missing bits and convert the array
+                // to a BinaryKey.
+                let mut final_bits = bits.clone();
+                let prefix_bits: Vec<bool> = key.into();
+                final_bits.extend_from_slice(&prefix_bits[..]);
+
+                let binkey = BinaryKey::from(final_bits);
+
+                let mut keccak256 = Keccak256::new();
+                keccak256.input::<Vec<u8>>((&binkey).into());
+                keccak256.input(val);
+                keccak256.result().to_vec()
+            }
+            BinaryExtTree::Branch(prefix, box left, box right) => {
+                let mut subkey = bits.clone();
+
+                let prefix_bits: Vec<bool> = prefix.into();
+                subkey.extend_from_slice(&prefix_bits[..]);
+
+                subkey.push(false);
+                let left_h = left.hash_m3_helper(subkey[..].to_vec());
+                *subkey.last_mut().unwrap() = true;
+
+                let right_h = right.hash_m3_helper(subkey);
+                let mut keccak256 = Keccak256::new();
+                keccak256.input(left_h);
+                keccak256.input(right_h);
                 keccak256.result().to_vec()
             }
             BinaryExtTree::EmptyChild => {
