@@ -97,6 +97,24 @@ impl From<&[u8]> for BinaryKey {
     }
 }
 
+impl From<Vec<bool>> for BinaryKey {
+    fn from(bits: Vec<bool>) -> Self {
+        let mut bytelen = bits.len() / 8;
+        if !bits.is_empty() {
+            bytelen += 1;
+        }
+
+        let mut bytevec = vec![0u8; bytelen];
+        for (i, bit) in bits.iter().enumerate() {
+            if *bit {
+                bytevec[i / 8] = bytevec[i / 8] | 1 << (7 - i % 8);
+            }
+        }
+
+        BinaryKey(bytevec, 0, bits.len())
+    }
+}
+
 impl Into<Vec<u8>> for &BinaryKey {
     fn into(self) -> Vec<u8> {
         let mut ret = vec![0u8; self.len() / 8];
@@ -182,11 +200,20 @@ mod tests {
         let s = k.suffix(2);
         assert_eq!(BinaryKey(vec![0x55], 3, 8), s);
     }
+
     #[test]
     fn test_split() {
         let k = BinaryKey(vec![0x55], 0, 8);
         let (p, s) = k.split(4);
         assert_eq!(BinaryKey(vec![0x55], 5, 8), s);
         assert_eq!(BinaryKey(vec![0x55], 0, 4), p);
+    }
+
+    #[test]
+    fn test_from_bool_vec() {
+        let v = vec![false, true, false, true];
+        let k = BinaryKey::from(v);
+
+        assert_eq!(k, BinaryKey(vec![0x50], 0, 4))
     }
 }
