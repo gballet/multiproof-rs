@@ -4,19 +4,21 @@ extern crate rlp;
 extern crate sha3;
 
 pub mod binary_tree;
+pub mod hashable;
 pub mod instruction;
 pub mod keys;
 pub mod multiproof;
 pub mod node;
 pub mod tree;
 
+pub use hashable::Hashable;
 pub use instruction::*;
 pub use keys::*;
 pub use multiproof::*;
 pub use node::*;
 pub use tree::{NodeType, Tree};
 
-impl<N: NodeType, T: Tree<N> + rlp::Decodable> ProofToTree<N, T> for Multiproof {
+impl<N: NodeType, T: Tree<N> + rlp::Decodable + Hashable> ProofToTree<N, T> for Multiproof {
     fn rebuild(&self) -> Result<T, String> {
         use Instruction::*;
 

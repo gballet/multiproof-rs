@@ -1,8 +1,9 @@
+use super::hashable::Hashable;
 use super::instruction::*;
 use super::tree::{NodeType, Tree};
 use serde::{Deserialize, Serialize};
 
-pub trait ProofToTree<N: NodeType, T: Tree<N>> {
+pub trait ProofToTree<N: NodeType, T: Tree<N> + Hashable> {
     /// Rebuilds a tree of type `T` based on the proof's components.
     fn rebuild(&self) -> Result<T, String>;
 }

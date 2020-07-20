@@ -1,5 +1,6 @@
 extern crate sha3;
 
+use super::hashable::Hashable;
 use super::tree::*;
 use super::*;
 use sha3::{Digest, Keccak256};
@@ -387,6 +388,23 @@ impl std::ops::Index<&NibbleKey> for Node {
     }
 }
 
+impl Hashable for Node {
+    fn hash(&self) -> Vec<u8> {
+        let composed_node = self.composition();
+
+        // If `composition` returned a payload whose length is less
+        // than 32 bytes, then compute its keccack256 hash in order
+        // to return the root hash.
+        if composed_node.len() < 32 {
+            let mut hasher = Keccak256::new();
+            hasher.input(&composed_node);
+            Vec::<u8>::from(&hasher.result()[..])
+        } else {
+            composed_node
+        }
+    }
+}
+
 impl Node {
     pub fn keys(&self) -> Vec<NibbleKey> {
         self.keys_helper(Vec::new())
@@ -513,21 +531,6 @@ impl Node {
                 /* Ignore EmptySlot */
                 (vec![], vec![])
             }
-        }
-    }
-
-    pub fn hash(&self) -> Vec<u8> {
-        let composed_node = self.composition();
-
-        // If `composition` returned a payload whose length is less
-        // than 32 bytes, then compute its keccack256 hash in order
-        // to return the root hash.
-        if composed_node.len() < 32 {
-            let mut hasher = Keccak256::new();
-            hasher.input(&composed_node);
-            Vec::<u8>::from(&hasher.result()[..])
-        } else {
-            composed_node
         }
     }
 

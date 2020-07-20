@@ -13,8 +13,14 @@ pub enum BinaryExtTree {
     EmptyChild,
 }
 
+impl Hashable for BinaryExtTree {
+    fn hash(&self) -> Vec<u8> {
+        return self.hash_m2();
+    }
+}
+
 impl BinaryExtTree {
-    pub fn hash(&self) -> Vec<u8> {
+    fn hash_m2(&self) -> Vec<u8> {
         match self {
             BinaryExtTree::Hash(h) => h.to_vec(),
             BinaryExtTree::Leaf(key, val) => {
