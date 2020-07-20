@@ -132,6 +132,16 @@ impl Into<Vec<u8>> for &BinaryKey {
     }
 }
 
+impl Into<Vec<bool>> for &BinaryKey {
+    fn into(self) -> Vec<bool> {
+        let mut ret = vec![false; self.len()];
+        for (i, b) in self.iter().enumerate() {
+            ret[i] = b;
+        }
+        ret
+    }
+}
+
 impl Key<bool> for BinaryKey {
     fn tail(&self) -> Self {
         BinaryKey(self.0[..].to_vec(), self.1 + 1, self.2)
@@ -211,6 +221,12 @@ mod tests {
         let (p, s) = k.split(4);
         assert_eq!(BinaryKey(vec![0x55], 5, 8), s);
         assert_eq!(BinaryKey(vec![0x55], 0, 4), p);
+    }
+
+    #[test]
+    fn test_into_u8_vec() {
+        let v: Vec<u8> = (&BinaryKey(vec![0x0Fu8], 4, 8)).into();
+        assert_eq!(v, vec![0xF0u8])
     }
 
     #[test]
