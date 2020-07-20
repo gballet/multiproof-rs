@@ -117,7 +117,11 @@ impl From<Vec<bool>> for BinaryKey {
 
 impl Into<Vec<u8>> for &BinaryKey {
     fn into(self) -> Vec<u8> {
-        let mut ret = vec![0u8; self.len() / 8];
+        let mut bytelen = self.len() / 8;
+        if self.len() % 8 != 0 {
+            bytelen += 1;
+        }
+        let mut ret = vec![0u8; bytelen];
         for (i, b) in self.iter().enumerate() {
             if b {
                 ret[i / 8] |= 1 << (7 - i)
