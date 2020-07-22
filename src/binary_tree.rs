@@ -16,7 +16,7 @@ pub enum BinaryExtTree {
 
 impl Hashable for BinaryExtTree {
     fn hash(&self) -> Vec<u8> {
-        return self.hash_m2();
+        self.hash_m2()
     }
 }
 
