@@ -107,7 +107,7 @@ impl From<Vec<bool>> for BinaryKey {
         let mut bytevec = vec![0u8; bytelen];
         for (i, bit) in bits.iter().enumerate() {
             if *bit {
-                bytevec[i / 8] = bytevec[i / 8] | 1 << (7 - i % 8);
+                bytevec[i / 8] |= 1 << (7 - i % 8);
             }
         }
 

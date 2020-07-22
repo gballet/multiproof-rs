@@ -49,7 +49,7 @@ impl BinaryExtTree {
         }
     }
 
-    fn hash_m3(&self) -> Vec<u8> {
+    pub fn hash_m3(&self) -> Vec<u8> {
         self.hash_m3_helper(Vec::new())
     }
 
@@ -59,7 +59,7 @@ impl BinaryExtTree {
             BinaryExtTree::Leaf(key, val) => {
                 // Add all the missing bits and convert the array
                 // to a BinaryKey.
-                let mut final_bits = bits.clone();
+                let mut final_bits = bits;
                 let prefix_bits: Vec<bool> = key.into();
                 final_bits.extend_from_slice(&prefix_bits[..]);
 
@@ -71,7 +71,7 @@ impl BinaryExtTree {
                 keccak256.result().to_vec()
             }
             BinaryExtTree::Branch(prefix, box left, box right) => {
-                let mut subkey = bits.clone();
+                let mut subkey = bits;
 
                 let prefix_bits: Vec<bool> = prefix.into();
                 subkey.extend_from_slice(&prefix_bits[..]);
