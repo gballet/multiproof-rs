@@ -73,6 +73,15 @@ See unit tests.
 
 ## Changelog
 
+### 0.1.9
+
+  * Add the `Hashable` trait and use methods M2 and M3 (see https://ethresear.ch/t/binary-trie-format/7621/6)
+  * Implement `From<Vec<bool>>` and `Into<Vec<bool>>`
+  * Binary keys use `bool` as a key type
+  * Use extensions for binary tries
+  * Bugfix: check that keys have the same length in insert.
+  * Fuzzing: introduce tests for nibblekey and Node::inset.
+
 ### 0.1.8
 
   * `keys` method on `Node` in order to get the list of keys present in the tree.
