@@ -9,6 +9,12 @@ use super::Key;
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct NibbleKey(Vec<u8>);
 
+impl Default for NibbleKey {
+    fn default() -> Self {
+        NibbleKey(vec![0u8; 64])
+    }
+}
+
 impl From<Vec<u8>> for NibbleKey {
     fn from(nibbles: Vec<u8>) -> Self {
         for nibble in nibbles.iter() {
