@@ -129,17 +129,11 @@ impl NodeType for BinaryExtTree {
 
 impl Tree<BinaryExtTree> for BinaryExtTree {
     fn is_leaf(&self) -> bool {
-        match self {
-            BinaryExtTree::Leaf(_, _) => true,
-            _ => false,
-        }
+        matches!(self, BinaryExtTree::Leaf(_, _))
     }
 
     fn is_empty(&self) -> bool {
-        match self {
-            BinaryExtTree::EmptyChild => true,
-            _ => false,
-        }
+        matches!(self, BinaryExtTree::EmptyChild)
     }
 
     fn num_children(&self) -> usize {

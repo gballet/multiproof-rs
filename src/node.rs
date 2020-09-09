@@ -21,17 +21,11 @@ impl NodeType for Node {
 
 impl Tree<Node> for Node {
     fn is_leaf(&self) -> bool {
-        match self {
-            Node::Leaf(_, _) => true,
-            _ => false,
-        }
+        matches!(self, Node::Leaf(_, _))
     }
 
     fn is_empty(&self) -> bool {
-        match self {
-            Node::EmptySlot => true,
-            _ => false,
-        }
+        matches!(self, Node::EmptySlot)
     }
 
     /// Returns the *maximum* child count of the tree's root.
