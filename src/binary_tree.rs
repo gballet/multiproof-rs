@@ -92,6 +92,34 @@ impl BinaryExtTree {
             }
         }
     }
+
+    pub fn hash_m4(&self) -> Vec<u8> {
+        let mut keccak256 = Keccak256::new();
+        match self {
+            BinaryExtTree::Hash(h) => return h.to_vec(),
+            BinaryExtTree::Leaf(_, val) => {
+                keccak256.input(vec![0u8]);
+                keccak256.input(val);
+            }
+            BinaryExtTree::Branch(prefix, box left, box right) => {
+                keccak256.input(left.hash_m4());
+                keccak256.input(right.hash_m4());
+                let mut rewind : Vec<u8>;
+                for i in 0..prefix.len() {
+                    rewind = keccak256.result_reset().to_vec().clone();
+                    if prefix[prefix.len()-1-i] {
+                        keccak256.input(BinaryExtTree::EmptyChild.hash_m4());
+                        keccak256.input(rewind);
+                    } else {
+                        keccak256.input(rewind);
+                        keccak256.input(BinaryExtTree::EmptyChild.hash_m4());
+                    }
+                }
+            }
+            BinaryExtTree::EmptyChild => {}
+        }
+        keccak256.result().to_vec()
+    }
 }
 
 impl NodeType for BinaryExtTree {
@@ -389,4 +417,11 @@ mod tests {
             )
         );
     }
+
+    #[test]
+    fn m4_hash_empty() {
+        let root = BinaryExtTree::default();
+        assert_eq!(root.hash_m4(), vec![197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0, 182, 83, 202, 130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112])
+    }
+
 }
