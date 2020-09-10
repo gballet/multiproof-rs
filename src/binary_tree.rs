@@ -120,9 +120,9 @@ impl BinaryExtTree {
                     rewind = keccak256.result_reset().to_vec().clone();
                     if prefix[prefix.len() - 1 - i] {
                         keccak256.input(BinaryExtTree::EmptyChild.hash_m4());
-                        keccak256.input(rewind);
+                        keccak256.input(&rewind);
                     } else {
-                        keccak256.input(rewind);
+                        keccak256.input(&rewind);
                         keccak256.input(BinaryExtTree::EmptyChild.hash_m4());
                     }
                 }
