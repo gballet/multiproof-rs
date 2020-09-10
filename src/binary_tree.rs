@@ -458,4 +458,25 @@ mod tests {
 
         assert_eq!(root.hash_m4(), rewind);
     }
+
+    #[test]
+    fn m4_hash_single_branch_split() {
+        let mut root = BinaryExtTree::default();
+        let k1 = BinaryKey::from(vec![0x00u8; 32]); // First bit = 0
+        root.insert(&k1, vec![10; 32]).unwrap();
+        let k2 = BinaryKey::from(vec![0xFFu8; 32]); // First bit = 1
+        root.insert(&k2, vec![10; 32]).unwrap();
+
+        let m4_hash = root.hash_m4();
+
+        if let BinaryExtTree::Branch(prefix, box left, box right) = root {
+            let mut digest = Keccak256::new();
+            digest.input(left.hash_m4());
+            digest.input(right.hash_m4());
+            let h = digest.result().to_vec();
+
+            assert_eq!(prefix.len(), 0);
+            assert_eq!(m4_hash, h);
+        }
+    }
 }
