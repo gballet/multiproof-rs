@@ -479,4 +479,36 @@ mod tests {
             assert_eq!(m4_hash, h);
         }
     }
+
+    #[test]
+    fn m4_hash_single_ext() {
+        let mut root = BinaryExtTree::default();
+        let k1 = BinaryKey::from(vec![0x40u8; 32]); // bits = 010...
+        root.insert(&k1, vec![10; 32]).unwrap();
+        let k2 = BinaryKey::from(vec![0x60u8; 32]); // bits = 011...
+        root.insert(&k2, vec![10; 32]).unwrap();
+
+        let m4_hash = root.hash_m4();
+
+        if let BinaryExtTree::Branch(prefix, box left, box right) = root {
+            // hash at bit #2 level
+            let mut digest = Keccak256::new();
+            digest.input(left.hash_m4());
+            digest.input(right.hash_m4());
+            let split_hash = digest.result_reset().to_vec();
+
+            // hash at bit #1 level, should be going right
+            digest.input(BinaryExtTree::EmptyChild.hash_m4());
+            digest.input(split_hash);
+            let l1_hash = digest.result_reset().to_vec();
+
+            // hash at bit #0 level, should be going left
+            digest.input(l1_hash);
+            digest.input(BinaryExtTree::EmptyChild.hash_m4());
+            let l0_hash = digest.result_reset().to_vec();
+
+            assert_eq!(prefix.len(), 2);
+            assert_eq!(m4_hash, l0_hash);
+        }
+    }
 }
