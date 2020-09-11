@@ -93,43 +93,43 @@ impl BinaryExtTree {
         }
     }
 
-    pub fn hash_m4(&self) -> Vec<u8> {
-        let mut keccak256 = Keccak256::new();
+    pub fn hash_m4<D: Digest>(&self) -> Vec<u8> {
+        let mut digest = D::new();
         match self {
             BinaryExtTree::Hash(h) => return h.to_vec(),
             BinaryExtTree::Leaf(key, val) => {
-                keccak256.input(vec![0u8]);
-                keccak256.input(val);
+                digest.input(vec![0u8]);
+                digest.input(val);
                 let mut rewind: Vec<u8>;
                 for i in 0..key.len() {
-                    rewind = keccak256.result_reset().to_vec().clone();
+                    rewind = digest.result_reset().to_vec().clone();
                     if key[key.len() - 1 - i] {
-                        keccak256.input(BinaryExtTree::EmptyChild.hash_m4());
-                        keccak256.input(rewind);
+                        digest.input(BinaryExtTree::EmptyChild.hash_m4::<D>());
+                        digest.input(rewind);
                     } else {
-                        keccak256.input(rewind);
-                        keccak256.input(BinaryExtTree::EmptyChild.hash_m4());
+                        digest.input(rewind);
+                        digest.input(BinaryExtTree::EmptyChild.hash_m4::<D>());
                     }
                 }
             }
             BinaryExtTree::Branch(prefix, box left, box right) => {
-                keccak256.input(left.hash_m4());
-                keccak256.input(right.hash_m4());
+                digest.input(left.hash_m4::<D>());
+                digest.input(right.hash_m4::<D>());
                 let mut rewind: Vec<u8>;
                 for i in 0..prefix.len() {
-                    rewind = keccak256.result_reset().to_vec().clone();
+                    rewind = digest.result_reset().to_vec().clone();
                     if prefix[prefix.len() - 1 - i] {
-                        keccak256.input(BinaryExtTree::EmptyChild.hash_m4());
-                        keccak256.input(&rewind);
+                        digest.input(BinaryExtTree::EmptyChild.hash_m4::<D>());
+                        digest.input(&rewind);
                     } else {
-                        keccak256.input(&rewind);
-                        keccak256.input(BinaryExtTree::EmptyChild.hash_m4());
+                        digest.input(&rewind);
+                        digest.input(BinaryExtTree::EmptyChild.hash_m4::<D>());
                     }
                 }
             }
             BinaryExtTree::EmptyChild => {}
         }
-        keccak256.result().to_vec()
+        digest.result().to_vec()
     }
 }
 
@@ -357,6 +357,7 @@ impl Default for BinaryExtTree {
 mod tests {
     extern crate rand;
 
+    use super::sha3::Sha3_256;
     use super::BinaryExtTree::*;
     use super::*;
     use rand::{thread_rng, Rng};
@@ -430,7 +431,7 @@ mod tests {
     fn m4_hash_empty() {
         let root = BinaryExtTree::default();
         assert_eq!(
-            root.hash_m4(),
+            root.hash_m4::<Keccak256>(),
             vec![
                 197, 210, 70, 1, 134, 247, 35, 60, 146, 126, 125, 178, 220, 199, 3, 192, 229, 0,
                 182, 83, 202, 130, 39, 59, 123, 250, 216, 4, 93, 133, 164, 112
@@ -450,16 +451,16 @@ mod tests {
         let mut rewind = digest.result_reset().to_vec();
         for i in 0..k.len() {
             if k[255 - i] {
-                digest.input(BinaryExtTree::EmptyChild.hash_m4());
+                digest.input(BinaryExtTree::EmptyChild.hash_m4::<Keccak256>());
             }
             digest.input(rewind);
             if !k[255 - i] {
-                digest.input(BinaryExtTree::EmptyChild.hash_m4());
+                digest.input(BinaryExtTree::EmptyChild.hash_m4::<Keccak256>());
             }
             rewind = digest.result_reset().to_vec();
         }
 
-        assert_eq!(root.hash_m4(), rewind);
+        assert_eq!(root.hash_m4::<Keccak256>(), rewind);
     }
 
     #[test]
@@ -470,12 +471,12 @@ mod tests {
         let k2 = BinaryKey::from(vec![0xFFu8; 32]); // First bit = 1
         root.insert(&k2, vec![10; 32]).unwrap();
 
-        let m4_hash = root.hash_m4();
+        let m4_hash = root.hash_m4::<Keccak256>();
 
         if let BinaryExtTree::Branch(prefix, box left, box right) = root {
             let mut digest = Keccak256::new();
-            digest.input(left.hash_m4());
-            digest.input(right.hash_m4());
+            digest.input(left.hash_m4::<Keccak256>());
+            digest.input(right.hash_m4::<Keccak256>());
             let h = digest.result().to_vec();
 
             assert_eq!(prefix.len(), 0);
@@ -491,23 +492,23 @@ mod tests {
         let k2 = BinaryKey::from(vec![0x60u8; 32]); // bits = 011...
         root.insert(&k2, vec![10; 32]).unwrap();
 
-        let m4_hash = root.hash_m4();
+        let m4_hash = root.hash_m4::<Keccak256>();
 
         if let BinaryExtTree::Branch(prefix, box left, box right) = root {
             // hash at bit #2 level
             let mut digest = Keccak256::new();
-            digest.input(left.hash_m4());
-            digest.input(right.hash_m4());
+            digest.input(left.hash_m4::<Keccak256>());
+            digest.input(right.hash_m4::<Keccak256>());
             let split_hash = digest.result_reset().to_vec();
 
             // hash at bit #1 level, should be going right
-            digest.input(BinaryExtTree::EmptyChild.hash_m4());
+            digest.input(BinaryExtTree::EmptyChild.hash_m4::<Keccak256>());
             digest.input(split_hash);
             let l1_hash = digest.result_reset().to_vec();
 
             // hash at bit #0 level, should be going left
             digest.input(l1_hash);
-            digest.input(BinaryExtTree::EmptyChild.hash_m4());
+            digest.input(BinaryExtTree::EmptyChild.hash_m4::<Keccak256>());
             let l0_hash = digest.result_reset().to_vec();
 
             assert_eq!(prefix.len(), 2);
@@ -525,6 +526,6 @@ mod tests {
             root.insert(&key, vec![5u8; 32]).unwrap();
         }
 
-        root.hash_m4();
+        root.hash_m4::<Sha3_256>();
     }
 }
