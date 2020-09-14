@@ -16,16 +16,16 @@ pub enum BinaryExtTree {
 
 impl Hashable for BinaryExtTree {
     fn hash(&self) -> Vec<u8> {
-        self.hash_m2()
+        self.hash_m2::<Keccak256>()
     }
 }
 
 impl BinaryExtTree {
-    fn hash_m2(&self) -> Vec<u8> {
+    fn hash_m2<D: Digest>(&self) -> Vec<u8> {
         match self {
             BinaryExtTree::Hash(h) => h.to_vec(),
             BinaryExtTree::Leaf(key, val) => {
-                let mut keccak256 = Keccak256::new();
+                let mut keccak256 = D::new();
                 keccak256.input(vec![0u8]);
                 keccak256.input(val);
                 let h = keccak256.result_reset();
@@ -34,7 +34,7 @@ impl BinaryExtTree {
                 keccak256.result().to_vec()
             }
             BinaryExtTree::Branch(prefix, box left, box right) => {
-                let mut keccak256 = Keccak256::new();
+                let mut keccak256 = D::new();
                 keccak256.input(left.hash());
                 keccak256.input(right.hash());
                 let h = keccak256.result_reset();
@@ -43,17 +43,17 @@ impl BinaryExtTree {
                 keccak256.result().to_vec()
             }
             BinaryExtTree::EmptyChild => {
-                let keccak256 = Keccak256::new();
+                let keccak256 = D::new();
                 keccak256.result().to_vec()
             }
         }
     }
 
-    pub fn hash_m3(&self) -> Vec<u8> {
-        self.hash_m3_helper(Vec::new())
+    pub fn hash_m3<D: Digest>(&self) -> Vec<u8> {
+        self.hash_m3_helper::<D>(Vec::new())
     }
 
-    fn hash_m3_helper(&self, bits: Vec<bool>) -> Vec<u8> {
+    fn hash_m3_helper<D: Digest>(&self, bits: Vec<bool>) -> Vec<u8> {
         match self {
             BinaryExtTree::Hash(h) => h.to_vec(),
             BinaryExtTree::Leaf(key, val) => {
@@ -65,7 +65,7 @@ impl BinaryExtTree {
 
                 let binkey = BinaryKey::from(final_bits);
 
-                let mut keccak256 = Keccak256::new();
+                let mut keccak256 = D::new();
                 keccak256.input::<Vec<u8>>((&binkey).into());
                 keccak256.input(val);
                 keccak256.result().to_vec()
@@ -77,17 +77,17 @@ impl BinaryExtTree {
                 subkey.extend_from_slice(&prefix_bits[..]);
 
                 subkey.push(false);
-                let left_h = left.hash_m3_helper(subkey[..].to_vec());
+                let left_h = left.hash_m3_helper::<D>(subkey[..].to_vec());
                 *subkey.last_mut().unwrap() = true;
 
-                let right_h = right.hash_m3_helper(subkey);
-                let mut keccak256 = Keccak256::new();
+                let right_h = right.hash_m3_helper::<D>(subkey);
+                let mut keccak256 = D::new();
                 keccak256.input(left_h);
                 keccak256.input(right_h);
                 keccak256.result().to_vec()
             }
             BinaryExtTree::EmptyChild => {
-                let keccak256 = Keccak256::new();
+                let keccak256 = D::new();
                 keccak256.result().to_vec()
             }
         }
