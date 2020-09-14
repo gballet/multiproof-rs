@@ -131,6 +131,43 @@ impl BinaryExtTree {
         }
         digest.result().to_vec()
     }
+
+    pub fn hash_m5<D: Digest>(&self) -> Vec<u8> {
+        let mut digest = D::new();
+        match self {
+            BinaryExtTree::Hash(h) => return h.to_vec(),
+            BinaryExtTree::Leaf(key, val) => {
+                digest.input(vec![0u8]);
+                digest.input(val);
+                let terminator = digest.result_reset().to_vec();
+
+                // Write the big endian header prefix. Since the
+                // key is at most 256 bits long and the header
+                // prefix won't get added if the key length is 0,
+                // then the length can be stored inside one byte,
+                // and the remaining 31 bytes are written as 0.
+                digest.input(vec![key.len() as u8]);
+                digest.input(vec![0u8; 31]);
+                digest.input(terminator);
+            }
+            BinaryExtTree::Branch(prefix, box left, box right) => {
+                digest.input(left.hash_m5::<D>());
+                digest.input(right.hash_m5::<D>());
+                let split = digest.result_reset().to_vec();
+
+                // Write the big endian header prefix. Since the
+                // key is at most 256 bits long and the header
+                // prefix won't get added if the key length is 0,
+                // then the length can be stored inside one byte,
+                // and the remaining 31 bytes are written as 0.
+                digest.input(vec![prefix.len() as u8]);
+                digest.input(vec![0u8; 31]);
+                digest.input(split);
+            }
+            BinaryExtTree::EmptyChild => {}
+        }
+        digest.result().to_vec()
+    }
 }
 
 impl NodeType for BinaryExtTree {
@@ -527,5 +564,18 @@ mod tests {
         }
 
         root.hash_m4::<Sha3_256>();
+    }
+
+    #[test]
+    fn many_keys_m5() {
+        let mut root = BinaryExtTree::default();
+        for _ in 0..1000 {
+            let mut key_bytes = vec![0u8; 32];
+            thread_rng().fill(&mut key_bytes[..]);
+            let key = BinaryKey::from(key_bytes);
+            root.insert(&key, vec![5u8; 32]).unwrap();
+        }
+
+        root.hash_m5::<Keccak256>();
     }
 }
