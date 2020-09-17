@@ -11,6 +11,7 @@ pub mod multiproof;
 pub mod node;
 pub mod tree;
 
+pub use binary_tree::*;
 pub use hashable::Hashable;
 pub use instruction::*;
 pub use keys::*;

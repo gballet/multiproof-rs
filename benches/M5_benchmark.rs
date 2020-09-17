@@ -2,7 +2,7 @@ extern crate multiproof_rs;
 extern crate rand;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use multiproof_rs::binary_tree::BinaryExtTree;
+use multiproof_rs::BinaryExtTree;
 use multiproof_rs::{BinaryKey, Tree};
 use rand::{thread_rng, Rng};
 use sha3::Sha3_256;
